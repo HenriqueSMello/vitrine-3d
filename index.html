@@ -85,7 +85,36 @@ h2 small{display:block;color:var(--mute);font-weight:600}
 .chip.on{background:var(--ink);color:#fff}
 
 /* grid */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:22px}
+.tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.lay{display:flex;background:var(--soft);border-radius:999px;padding:3px;position:relative}
+.lay::before{content:"";position:absolute;top:3px;bottom:3px;left:3px;width:38px;border-radius:999px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.12);
+  transform:translateX(calc(var(--li,1) * 38px));transition:transform .45s cubic-bezier(.22,1,.36,1)}
+.lay button{position:relative;width:38px;height:30px;display:grid;place-items:center;border-radius:999px}
+.lay svg{width:16px;height:16px;fill:#86868b;transition:fill .3s}
+.lay button.on svg{fill:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(var(--cols,2),minmax(0,1fr));gap:22px}
+.grid[data-cols="1"] .shot{height:clamp(220px,40vw,380px)}
+.grid[data-cols="1"] .shot img{max-height:92%;max-width:86%}
+.grid[data-cols="1"] .card h3{font-size:30px}
+.grid[data-cols="4"]{gap:12px}
+.grid[data-cols="4"] .card{padding:14px 14px 12px;border-radius:20px}
+.grid[data-cols="4"] .card .tag,.grid[data-cols="4"] .card p,.grid[data-cols="4"] .badge3d{display:none}
+.grid[data-cols="4"] .card h3{font-size:clamp(11px,1.5vw,17px);line-height:1.2}
+.grid[data-cols="4"] .shot{height:clamp(56px,11vw,150px);margin:8px -4px 4px}
+.grid[data-cols="4"] .shot img{max-height:100%}
+.grid[data-cols="4"] .price{font-size:clamp(11px,1.4vw,15px)}
+.grid[data-cols="4"] .swatch{display:none}
+@media(max-width:560px){
+  .grid{gap:12px}
+  .grid[data-cols="2"] .card{padding:16px 14px 14px;border-radius:22px}
+  .grid[data-cols="2"] .card h3{font-size:16px}.grid[data-cols="2"] .card p{font-size:13px}
+  .grid[data-cols="2"] .shot{height:110px;margin:10px -6px 4px}.grid[data-cols="2"] .shot img{max-height:96px}
+  .grid[data-cols="2"] .badge3d{display:none}.grid[data-cols="2"] .swatch{top:16px;right:14px}.grid[data-cols="2"] .swatch i{width:9px;height:9px}
+  .grid[data-cols="2"] .tag{font-size:10px}
+  .grid[data-cols="4"]{gap:7px}.grid[data-cols="4"] .card{padding:8px 8px 8px;border-radius:14px}
+  .grid[data-cols="4"] .card h3{font-size:10px}.grid[data-cols="4"] .price{font-size:10px}
+  .grid[data-cols="1"] .card h3{font-size:24px}
+}
 .card{background:#fff;border-radius:var(--r);padding:26px 26px 22px;position:relative;cursor:pointer;
   box-shadow:0 2px 12px rgba(0,0,0,.04);transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s;overflow:hidden}
 .card:hover{transform:translateY(-6px) scale(1.01);box-shadow:0 22px 50px rgba(0,0,0,.10)}
@@ -210,7 +239,7 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
   .info{padding:24px 22px 36px;overflow:visible}
   .how{grid-template-columns:1fr 1fr}
 }
-@media(max-width:560px){.hero{padding-top:56px}.how{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
+@media(max-width:560px){.hero{padding-top:56px}.how{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -236,7 +265,12 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
 <section id="catalogo">
   <div class="sec-head">
     <h2><small>Catálogo</small>Escolha o seu par.</h2>
-    <div class="chips" id="chips"></div>
+    <div class="tools"><div class="chips" id="chips"></div>
+      <div class="lay" id="lay" role="radiogroup" aria-label="Visualização">
+        <button data-c="1" aria-label="1 por linha"><svg viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="2.5"/></svg></button>
+        <button data-c="2" aria-label="2 por linha"><svg viewBox="0 0 16 16"><rect x="2" y="2" width="5.2" height="5.2" rx="1.3"/><rect x="8.8" y="2" width="5.2" height="5.2" rx="1.3"/><rect x="2" y="8.8" width="5.2" height="5.2" rx="1.3"/><rect x="8.8" y="8.8" width="5.2" height="5.2" rx="1.3"/></svg></button>
+        <button data-c="4" aria-label="4 por linha"><svg viewBox="0 0 16 16"><rect x="1.5" y="1.5" width="2.6" height="2.6" rx=".7"/><rect x="4.9" y="1.5" width="2.6" height="2.6" rx=".7"/><rect x="8.3" y="1.5" width="2.6" height="2.6" rx=".7"/><rect x="11.7" y="1.5" width="2.6" height="2.6" rx=".7"/><rect x="1.5" y="4.9" width="2.6" height="2.6" rx=".7"/><rect x="4.9" y="4.9" width="2.6" height="2.6" rx=".7"/><rect x="8.3" y="4.9" width="2.6" height="2.6" rx=".7"/><rect x="11.7" y="4.9" width="2.6" height="2.6" rx=".7"/><rect x="1.5" y="8.3" width="2.6" height="2.6" rx=".7"/><rect x="4.9" y="8.3" width="2.6" height="2.6" rx=".7"/><rect x="8.3" y="8.3" width="2.6" height="2.6" rx=".7"/><rect x="11.7" y="8.3" width="2.6" height="2.6" rx=".7"/><rect x="1.5" y="11.7" width="2.6" height="2.6" rx=".7"/><rect x="4.9" y="11.7" width="2.6" height="2.6" rx=".7"/><rect x="8.3" y="11.7" width="2.6" height="2.6" rx=".7"/><rect x="11.7" y="11.7" width="2.6" height="2.6" rx=".7"/></svg></button>
+      </div></div>
   </div>
   <div class="grid" id="grid"></div>
 </section>
@@ -395,6 +429,46 @@ function render() {
   });
 }
 render();
+
+/* mosaico: 1, 2 ou 4 por linha — troca animada (FLIP) e gesto de pinça no celular */
+const grid = $('#grid'), layBtns = [...document.querySelectorAll('#lay button')], LEVELS = ['1', '2', '4'];
+let cols = (() => { try { return localStorage.getItem('v3d-cols'); } catch { return null; } })() || (innerWidth < 600 ? '2' : '4');
+function setCols(c, animate = true) {
+  if (!LEVELS.includes(c)) return;
+  const cards = [...grid.children];
+  const before = animate ? cards.map((el) => el.getBoundingClientRect()) : null;
+  cols = c; grid.dataset.cols = c; grid.style.setProperty('--cols', c);
+  layBtns.forEach((b) => b.classList.toggle('on', b.dataset.c === c));
+  $('#lay').style.setProperty('--li', LEVELS.indexOf(c));
+  try { localStorage.setItem('v3d-cols', c); } catch {}
+  if (!animate) return;
+  cards.forEach((el, i) => {
+    const a = before[i], b = el.getBoundingClientRect();
+    if (!b.width) return;
+    const dx = a.left - b.left, dy = a.top - b.top, sx = a.width / b.width, sy = a.height / b.height;
+    el.animate([{ transformOrigin: 'top left', transform: `translate(${dx}px,${dy}px) scale(${sx},${sy})` },
+                { transformOrigin: 'top left', transform: 'none' }],
+               { duration: 520, easing: 'cubic-bezier(.22,1,.36,1)', delay: i * 18 });
+    const im = el.querySelector('.shot img');
+    im?.animate([{ opacity: .4, transform: 'scale(.92)' }, { opacity: 1, transform: 'none' }], { duration: 520, easing: 'cubic-bezier(.22,1,.36,1)', delay: i * 18 });
+  });
+  haptic();
+}
+layBtns.forEach((b) => b.onclick = () => setCols(b.dataset.c));
+setCols(cols, false);
+// pinça: afastar os dedos = menos colunas (maior), aproximar = mais colunas
+let pinch = null;
+grid.addEventListener('touchstart', (e) => { if (e.touches.length === 2) pinch = { d: Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY), done: false }; }, { passive: true });
+grid.addEventListener('touchmove', (e) => {
+  if (!pinch || e.touches.length !== 2) return;
+  e.preventDefault();
+  const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY), r = d / pinch.d;
+  if (pinch.done) return;
+  const i = LEVELS.indexOf(cols);
+  if (r > 1.25 && i > 0) { setCols(LEVELS[i - 1]); pinch.done = true; }
+  else if (r < 0.8 && i < LEVELS.length - 1) { setCols(LEVELS[i + 1]); pinch.done = true; }
+}, { passive: false });
+grid.addEventListener('touchend', () => { pinch = null; });
 
 /* produto */
 const mv = $('#mv'); let cur = null, size = null;
