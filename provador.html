@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Vitrine 3D · Provador</title>
+<!-- Rastreamento do pé: WebAR.rocks.hand (MIT) — github.com/WebAR-rocks/WebAR.rocks.hand, demo footVTO -->
+<script src="https://cdn.jsdelivr.net/gh/WebAR-rocks/WebAR.rocks.hand@master/dist/WebARRocksHand.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.131.3/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.131.3/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/WebAR-rocks/WebAR.rocks.hand@master/helpers/HandTrackerThreeHelper.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/WebAR-rocks/WebAR.rocks.hand@master/helpers/landmarksStabilizers/OneEuroLMStabilizer.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,system-ui,sans-serif;overflow:hidden;height:100vh}
+canvas{position:fixed;inset:0;width:100vw;height:100vh}
+#handTrackerCanvas{z-index:1}#ARCanvas{z-index:2}
+.top{position:fixed;z-index:5;top:max(14px,env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;align-items:center}
+.btn{width:42px;height:42px;border-radius:50%;border:0;background:rgba(0,0,0,.42);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#fff;font-size:22px;display:grid;place-items:center}
+.status{padding:9px 14px;border-radius:999px;background:rgba(0,0,0,.42);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);font-size:14px;font-weight:500}
+.loading{position:fixed;inset:0;z-index:10;display:grid;place-items:center;background:radial-gradient(120% 90% at 50% 30%,#1d1d1f,#000);transition:opacity .6s}
+.loading.off{opacity:0;pointer-events:none}
+.loading div{text-align:center}.loading b{display:block;font-size:20px;margin-top:16px}.loading span{font-size:13px;opacity:.7}
+.ring{width:56px;height:56px;border-radius:50%;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;margin:auto;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hint{position:fixed;z-index:5;left:50%;top:84px;transform:translateX(-50%);width:min(88%,380px);text-align:center;font-size:14px;line-height:1.45;
+  background:rgba(0,0,0,.45);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:12px 16px;border-radius:16px;transition:opacity .5s}
+.name{position:fixed;z-index:5;left:0;right:0;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 104px);text-align:center;font-size:15px;font-weight:600;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+.name span{display:block;font-size:12px;font-weight:500;opacity:.85}
+.bottom{position:fixed;z-index:5;left:0;right:0;bottom:max(18px,env(safe-area-inset-bottom));height:92px}
+.car{position:absolute;inset:0;display:flex;align-items:center;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding:0 calc(50% - 38px);scrollbar-width:none}
+.car::-webkit-scrollbar{display:none}
+.car button{position:relative;flex:0 0 76px;height:76px;border-radius:50%;border:0;background:rgba(255,255,255,.9);scroll-snap-align:center;display:grid;place-items:center;
+  padding:10px;transition:transform .25s cubic-bezier(.22,1,.36,1),opacity .25s;opacity:.7;transform:scale(.78)}
+.car button.on{opacity:1;transform:scale(1)}
+.car button.soon::after{content:"em breve";position:absolute;bottom:-2px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:600;color:#fff;background:rgba(0,0,0,.65);padding:2px 6px;border-radius:999px;white-space:nowrap}
+.car img{width:100%;height:100%;object-fit:contain}
+.shutter{position:absolute;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;border:4px solid #fff;pointer-events:none;z-index:2}
+.toast{position:fixed;z-index:20;left:50%;bottom:140px;transform:translate(-50%,20px);opacity:0;background:rgba(29,29,31,.92);padding:12px 18px;border-radius:14px;font-size:14px;transition:.35s;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.prev{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.88);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px}
+.prev.on{display:flex}.prev img{max-width:100%;max-height:72vh;border-radius:18px}.prev p{font-size:13px;opacity:.75}
+.prev button{height:44px;padding:0 24px;border-radius:999px;border:0;background:#0071e3;color:#fff;font-size:16px;font-weight:600}
+</style>
+</head>
+<body>
+<canvas id="handTrackerCanvas"></canvas>
+<canvas id="ARCanvas"></canvas>
+
+<div class="loading" id="loading"><div><div class="ring"></div><b>Preparando o provador</b><span>Permita o uso da câmera</span></div></div>
+<div class="top"><button class="btn" id="close" aria-label="Fechar">×</button><div class="status" id="status">Procurando seus pés…</div><span style="width:42px"></span></div>
+<div class="hint" id="hint">Aponte a câmera para os seus pés, de qualquer ângulo. Arraste as bolinhas para trocar a cor. Toque no círculo para tirar foto.</div>
+<div class="name" id="name"></div>
+<div class="bottom"><div class="shutter"></div><div class="car" id="car"></div></div>
+<div class="toast" id="toast"></div>
+<div class="prev" id="prev"><img alt=""><p>Segure a foto para salvar</p><button id="prevOk">Voltar</button></div>
+
+<script type="module">
+import { lengthM, REF_BR } from './dims.js';
+
+// modelos 3D reais (gerados com TRELLIS a partir das fotos) já no referencial do rastreador de pé
+const FOOT_MODELS = { nb550: 'models3d/nb550_foot.glb' };
+const CATALOG = {
+  nb550: { name: 'New Balance 550', variants: [
+    { vid: 'nb550', nick: 'White Navy' }, { vid: 'nb550_b', nick: 'Grey Gum' }, { vid: 'nb550_d', nick: 'Cream Green' } ] },
+  aj1: { name: 'Air Jordan 1 Low', variants: [ { vid: 'aj1', nick: 'Panda Prank · Dragon' }, { vid: 'aj1_b', nick: 'Panda Prank · Jungle' } ] },
+};
+const q = new URLSearchParams(location.search);
+const pid = CATALOG[q.get('p')] ? q.get('p') : 'nb550';
+const size = +q.get('s') || REF_BR;
+const P = CATALOG[pid];
+let idx = Math.max(0, P.variants.findIndex((v) => v.vid === q.get('v')));
+if (!FOOT_MODELS[P.variants[idx].vid]) idx = Math.max(0, P.variants.findIndex((v) => FOOT_MODELS[v.vid]));
+
+const $ = (s) => document.querySelector(s);
+const toast = (t) => { const e = $('#toast'); e.textContent = t; e.classList.add('on'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('on'), 2200); };
+const haptic = () => { try { navigator.vibrate?.(6); } catch {} };
+
+// ---- carrossel de cores (o item no anel é o calçado) ----
+const car = $('#car');
+car.innerHTML = P.variants.map((v, i) => `<button data-i="${i}" class="${FOOT_MODELS[v.vid] ? '' : 'soon'}" aria-label="${v.nick}"><img src="img/${v.vid}_lat.webp" alt=""></button>`).join('');
+const items = [...car.children];
+function center(i, smooth = true) { const b = items[i]; car.scrollTo({ left: b.offsetLeft - (car.clientWidth - b.offsetWidth) / 2, behavior: smooth ? 'smooth' : 'instant' }); }
+items.forEach((b) => b.onclick = () => { const i = +b.dataset.i; i === idx ? shoot() : center(i); });
+car.addEventListener('scroll', () => {
+  const mid = car.scrollLeft + car.clientWidth / 2; let best = 0, bd = 1e9;
+  items.forEach((b, i) => { const d = Math.abs(b.offsetLeft + b.offsetWidth / 2 - mid); if (d < bd) { bd = d; best = i; } });
+  if (best !== idx) select(best);
+}, { passive: true });
+
+// ---- rastreamento ----
+const S = { threshold: 0.9, NN: 31, translation: [0, -0.02, 0], baseScale: 0.95 };
+let three = null, loader = null, cache = {};
+function setName() { const v = P.variants[idx]; $('#name').innerHTML = `${P.name}<span>${v.nick} · tam. ${size} · ${(lengthM(pid, size) * 100).toFixed(1)} cm</span>`; }
+async function loadShoe(vid) {
+  if (!FOOT_MODELS[vid]) return null;
+  cache[vid] ??= new Promise((res, rej) => loader.load(FOOT_MODELS[vid], (g) => res(g.scene), undefined, rej));
+  return cache[vid];
+}
+async function select(i) {
+  idx = i; haptic();
+  items.forEach((b, k) => b.classList.toggle('on', k === i));
+  setName();
+  const v = P.variants[i];
+  if (!three) return;
+  if (!FOOT_MODELS[v.vid]) { toast('Modelo 3D desta cor em produção'); return; }
+  const shoe = (await loadShoe(v.vid)).clone();
+  if (P.variants[idx] !== v) return;
+  // escala real: o GLB está em BR 41; ajusta para a numeração escolhida
+  shoe.scale.multiplyScalar(S.baseScale * (lengthM(pid, size) / lengthM(pid, REF_BR)));
+  shoe.position.add(new THREE.Vector3().fromArray(S.translation));
+  HandTrackerThreeHelper.clear_threeObjects(false);
+  HandTrackerThreeHelper.add_threeObject(shoe);
+}
+
+function fullscreen(cv) { cv.width = innerWidth * Math.min(devicePixelRatio, 2); cv.height = innerHeight * Math.min(devicePixelRatio, 2); }
+async function main() {
+  const htc = $('#handTrackerCanvas'), ar = $('#ARCanvas');
+  fullscreen(htc); fullscreen(ar);
+  setName(); items[idx].classList.add('on'); requestAnimationFrame(() => center(idx, false));
+  three = await HandTrackerThreeHelper.init({
+    poseLandmarksLabels: ['ankleBack', 'ankleOut', 'ankleIn', 'ankleFront', 'heelBackOut', 'heelBackIn', 'pinkyToeBaseTop', 'middleToeBaseTop', 'bigToeBaseTop'],
+    enableFlipObject: true, cameraZoom: 1, freeZRot: false, threshold: S.threshold,
+    scanSettings: {
+      multiDetectionSearchSlotsRate: 0.5, multiDetectionMaxOverlap: 0.3, multiDetectionOverlapScaleXY: [0.5, 1],
+      multiDetectionEqualizeSearchSlotScale: true, multiDetectionForceSearchOnOtherSide: true, multiDetectionForceChirality: 1,
+      disableIsRightHandNNEval: true, overlapFactors: [1, 1, 1], translationScalingFactors: [0.3, 0.3, 1], nScaleLevels: 2, scale0Factor: 0.5,
+    },
+    VTOCanvas: ar, handTrackerCanvas: htc, debugDisplayLandmarks: false,
+    NNsPaths: [`https://cdn.jsdelivr.net/gh/WebAR-rocks/WebAR.rocks.hand@master/neuralNets/NN_FOOT_${S.NN}.json`],
+    maxHandsDetected: 2,
+    stabilizationSettings: { NNSwitchMask: { isRightHand: false, isFlipped: false } },
+    landmarksStabilizerSpec: { minCutOff: 0.001, beta: 5 },
+    callbackTrack: undefined,
+  });
+  htc.style.zIndex = 3; ar.style.zIndex = 4;   // correção do iOS citada no demo
+  three.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  three.renderer.outputEncoding = THREE.sRGBEncoding;
+  three.scene.add(new THREE.HemisphereLight(0xffffff, 0x777777, 1.6));
+  const dl = new THREE.DirectionalLight(0xffffff, 1.2); dl.position.set(0.5, 1, 1); three.scene.add(dl);
+  loader = new THREE.GLTFLoader();
+  // oclusor: a perna/pé "esconde" a parte do tênis que fica atrás dela
+  loader.load('models3d/occluder.glb', (g) => {
+    const occ = g.scene.children[0];
+    occ.scale.multiplyScalar(S.baseScale); occ.position.add(new THREE.Vector3().fromArray(S.translation));
+    HandTrackerThreeHelper.add_threeOccluder(occ);
+  });
+  await select(idx);
+  $('#loading').classList.add('off');
+  setTimeout(() => $('#hint').style.opacity = 0, 6000);
+}
+
+// ---- foto (secundário): vídeo + tênis num JPEG ----
+function shoot() {
+  haptic();
+  requestAnimationFrame(() => {
+    const a = $('#handTrackerCanvas'), b = $('#ARCanvas');
+    const c = document.createElement('canvas'); c.width = b.width; c.height = b.height;
+    const x = c.getContext('2d'); x.drawImage(a, 0, 0, c.width, c.height); x.drawImage(b, 0, 0, c.width, c.height);
+    c.toBlob(async (blob) => {
+      const f = new File([blob], 'vitrine-3d.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare?.({ files: [f] })) { try { await navigator.share({ files: [f], title: 'Vitrine 3D' }); return; } catch {} }
+      $('#prev img').src = URL.createObjectURL(blob); $('#prev').classList.add('on');
+    }, 'image/jpeg', 0.92);
+  });
+}
+$('#prevOk').onclick = () => $('#prev').classList.remove('on');
+$('#close').onclick = () => { if (history.length > 1) history.back(); else location.href = './'; };
+
+main().catch((e) => {
+  console.error(e);
+  $('#loading div').innerHTML = `<b>Não foi possível abrir a câmera</b><span>${e?.name === 'NotAllowedError' || /PERMISSION|WEBCAM/i.test(String(e)) ? 'Permita o acesso à câmera e recarregue a página.' : 'Seu aparelho ou navegador pode não ser compatível.'}</span>`;
+});
+</script>
+</body>
+</html>

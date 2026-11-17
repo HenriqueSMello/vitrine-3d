@@ -373,6 +373,10 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
 
 <script type="module">
 import { generateModel } from './gen3d.js';
+import { lengthM, REF_BR } from './dims.js';
+// modelos 3D reais (TRELLIS, a partir das fotos) — os demais ainda usam o modelo gerado no navegador
+const REAL3D = { nb550: 'models3d/nb550.glb' };
+const FOOT3D = { nb550: true };
 import { Swiper, FreeStrip, dragToClose, haptic } from './swipe.js';
 let tryon = null; const loadTryOn = async () => tryon ??= new (await import('./tryon.js')).TryOn(document.querySelector('#tryon'));
 
@@ -532,7 +536,7 @@ async function open(p, vi = 0) {
   $('#sizes').innerHTML = '';
   [36,37,38,39,40,41,42,43].forEach((s) => {
     const b = document.createElement('button'); b.textContent = s;
-    b.onclick = () => { size = s; haptic(); document.querySelectorAll('#sizes button').forEach((x) => x.classList.toggle('on', x === b)); };
+    b.onclick = () => { size = s; haptic(); applyScale(); document.querySelectorAll('#sizes button').forEach((x) => x.classList.toggle('on', x === b)); };
     $('#sizes').append(b);
   });
   $('#vars').innerHTML = p.variants.map((v, i) => `<button data-i="${i}" aria-label="${v.nick}"><img src="img/${v.vid}_lat.webp" alt=""></button>`).join('');
@@ -543,6 +547,13 @@ async function open(p, vi = 0) {
   showVariant(vi);
 }
 let curV = null;
+// escala real no AR: GLB real está em BR 41; o gerado no navegador mede 30 cm
+function applyScale() {
+  if (!curV) return;
+  const base = REAL3D[curV.vid] ? lengthM(cur.id, REF_BR) : 0.30;
+  const k = (lengthM(cur.id, size || REF_BR) / base).toFixed(4);
+  mv.scale = `${k} ${k} ${k}`;
+}
 async function showVariant(i) {
   const p = cur, v = variantOf(p, i); curV = v;
   $('#pName').textContent = `${p.name} “${v.nick}”`;
@@ -562,8 +573,9 @@ async function showVariant(i) {
   mv.removeAttribute('src');
   await new Promise((r) => setTimeout(r, 350));
   if (curV !== v) return;
-  const url = await generateModel(img(v, 'lat'), img(v, 'med'));
+  const url = REAL3D[v.vid] || await generateModel(img(v, 'lat'), img(v, 'med'));
   if (curV !== v) return;
+  applyScale();
   mv.addEventListener('load', () => { if (curV !== v) return; modelReady = true; updateArNote(); }, { once: true });
   mv.src = url;
   mv.cameraOrbit = '-28deg 74deg auto'; mv.jumpCameraToGoal?.();
@@ -636,6 +648,8 @@ async function shoot() {
 }
 $('#footBtn').onclick = async () => {
   if (!navigator.mediaDevices?.getUserMedia) { toast('Este navegador não libera a câmera'); return; }
+  // provador 3D com rastreamento do pé (WebAR.rocks) para os modelos que já têm 3D real
+  if (FOOT3D[cur.id]) { location.href = `provador.html?p=${cur.id}&v=${curV?.vid ?? ''}&s=${size || REF_BR}`; return; }
   const ov = $('#tryon'), start = curV?.vi ?? 0;
   ov.classList.add('on', 'scanning'); $('#toHint').style.opacity = 1;
   buildToCar(); toIdx = -1;
