@@ -8,13 +8,14 @@ ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/di
 ort.env.wasm.numThreads = 1;
 
 const MODEL = new URL('./models/foot.onnx', import.meta.url).href;
-const S = 320;                                  // entrada da rede
-const CLASSES = [56, 203, 265, 432];            // Boot, Footwear, Human foot, Sandal
-const CONF = 0.3;
+const S = 416;                                  // entrada da rede
+// limiar por classe: pé descalço tem confiança mais baixa que calçado
+const CLASSES = { 265: 0.17, 203: 0.3, 56: 0.3, 432: 0.3 };   // Human foot, Footwear, Boot, Sandal
+const LEG = 269, LEG_CONF = 0.15;                                // Human leg (para saber de que lado fica o calcanhar)
 
 let sessionP = null;
 // o modelo (14 MB) é servido em partes de 3,5 MB e remontado aqui
-const PARTS = 5;
+const PARTS = 4;
 const getSession = () => sessionP ??= (async () => {
   const bufs = await Promise.all(Array.from({ length: PARTS }, (_, i) => fetch(`${MODEL}.part${i}`).then((r) => { if (!r.ok) throw new Error('modelo'); return r.arrayBuffer(); })));
   const all = new Uint8Array(bufs.reduce((n, b) => n + b.byteLength, 0)); let o = 0;
@@ -58,10 +59,10 @@ export class TryOn {
   /** imagens do tênis: vista de cima (pé esquerdo/direito) e lateral */
   async setVariant(v, imgFn) {
     const tok = (this.tok = (this.tok || 0) + 1);
-    const [tL, tR, lat] = await Promise.all([loadImg(imgFn(v, 'topL')), loadImg(imgFn(v, 'topR')), loadImg(imgFn(v, 'lat'))]);
+    const [tL, tR, lat, med] = await Promise.all(['topL', 'topR', 'lat', 'med'].map((k) => loadImg(imgFn(v, k))));
     if (tok !== this.tok) return;
     this.prevImgs = this.imgs; this.swapT = performance.now();
-    this.imgs = { tL, tR, lat };
+    this.imgs = { tL, tR, lat, med };
   }
   async start() {
     this.running = true;
@@ -120,19 +121,32 @@ export class TryOn {
     for (let i = 0, j = 0; i < N; i++, j += 4) { inp[i] = d[j] / 255; inp[i + N] = d[j + 1] / 255; inp[i + 2 * N] = d[j + 2] / 255; }
     const out = await this.session.run({ [this.session.inputNames[0]]: new ort.Tensor('float32', inp, [1, 3, S, S]) });
     const o = out[this.session.outputNames[0]], A = o.dims[2], data = o.data;   // [1, 4+601, A]
-    const dets = [];
+    const dets = [], legs = [];
+    const box = (a, s) => {
+      const cx = data[a], cy = data[A + a], w = data[2 * A + a], h = data[3 * A + a];
+      return { s, x: (cx - w / 2 - px) / dw, y: (cy - h / 2 - py) / dh, w: w / dw, h: h / dh };   // 0..1 do vídeo
+    };
     for (let a = 0; a < A; a++) {
       let best = 0;
-      for (const k of CLASSES) { const s = data[(4 + k) * A + a]; if (s > best) best = s; }
-      if (best < CONF) continue;
-      const cx = data[a], cy = data[A + a], w = data[2 * A + a], h = data[3 * A + a];
-      // de volta para coordenadas do vídeo (0..1)
-      dets.push({ s: best, x: (cx - w / 2 - px) / dw, y: (cy - h / 2 - py) / dh, w: w / dw, h: h / dh });
+      for (const k in CLASSES) { const s = data[(4 + +k) * A + a]; if (s >= CLASSES[k] && s > best) best = s; }
+      if (best) {
+        const b = box(a, best);
+        // descarta "fatias" coladas na borda (pé de cadeira, objetos cortados)
+        const edge = b.x < 0.01 || b.x + b.w > 0.99;
+        if (!(edge && b.w < 0.12) && b.w > 0.04 && b.h > 0.03) dets.push(b);
+      }
+      const ls = data[(4 + LEG) * A + a];
+      if (ls > LEG_CONF) legs.push(box(a, ls));
     }
-    dets.sort((a, b) => b.s - a.s);
-    const keep = [];
-    for (const d2 of dets) { if (keep.every((k) => iou(k, d2) < 0.4)) keep.push(d2); if (keep.length === 2) break; }
-    return keep;
+    const nms = (arr, n) => { arr.sort((a, b) => b.s - a.s); const k = []; for (const d2 of arr) { if (k.every((q) => iou(q, d2) < 0.4)) k.push(d2); if (k.length === n) break; } return k; };
+    const feet = nms(dets, 2), lg = nms(legs, 2);
+    // lado do bico: o calcanhar fica embaixo da perna -> o bico aponta para o lado oposto
+    for (const f of feet) {
+      const fx = f.x + f.w / 2, fy = f.y;
+      const leg = lg.filter((l) => l.y < fy + f.h * 0.5).sort((a, b) => Math.abs(a.x + a.w / 2 - fx) - Math.abs(b.x + b.w / 2 - fx))[0];
+      if (leg) f.toeRight = (leg.x + leg.w / 2) < fx;
+    }
+    return feet;
   }
   update(dets) {
     const now = performance.now();
@@ -145,6 +159,7 @@ export class TryOn {
       const i = dist[0] <= dist[1] ? 0 : 1;
       this.slots[i].target = d; this.slots[i].seen = now;
     } else dets.forEach((d, i) => { this.slots[i].target = d; this.slots[i].seen = now; });
+    for (const s of this.slots) if (s.target && s.target.toeRight !== undefined && now - s.seen < 50) s.toeVote = Math.max(-1, Math.min(1, (s.toeVote || 0) * 0.7 + (s.target.toeRight ? 0.3 : -0.3)));
     const n = this.slots.filter((s) => now - s.seen < 400).length;
     this.say(n === 2 ? 'Tênis calçados ✓' : n === 1 ? 'Mostre os dois pés' : 'Aponte para os seus pés');
   }
@@ -173,11 +188,12 @@ export class TryOn {
       if (!s.box) s.box = { ...t };
       for (const k of ['x', 'y', 'w', 'h']) s.box[k] += (t[k] - s.box[k]) * 0.35;
       if (s.alpha < 0.02) return;
-      if (fade < 1 && this.prevImgs) this.drawShoe(c, s.box, i, this.prevImgs, s.alpha * (1 - fade));
-      this.drawShoe(c, s.box, i, this.imgs, s.alpha * fade);
+      const toeRight = (s.toeVote ?? 1) >= 0;
+      if (fade < 1 && this.prevImgs) this.drawShoe(c, s.box, i, this.prevImgs, s.alpha * (1 - fade), toeRight);
+      this.drawShoe(c, s.box, i, this.imgs, s.alpha * fade, toeRight);
     });
   }
-  drawShoe(c, b, i, imgs, alpha) {
+  drawShoe(c, b, i, imgs, alpha, toeRight) {
     const vertical = b.h > b.w * 0.85;      // vista de cima: pé "em pé" na tela
     c.save(); c.globalAlpha = alpha;
     if (vertical) {
@@ -188,12 +204,12 @@ export class TryOn {
       shadow(c, cx, cy + h * 0.04, w * 0.62, h * 0.56, 0.32);
       c.drawImage(im, cx - w / 2, cy - h / 2, w, h);
     } else {
-      const im = imgs.lat;
-      const w = b.w * 1.12, h = w * im.height / im.width;
+      // bico para a direita -> foto interna (já tem o bico à direita); para a esquerda -> foto externa
+      const right = toeRight !== this.flip, im = right ? imgs.med : imgs.lat;
+      const w = b.w * 1.18, h = w * im.height / im.width;
       const cx = b.x + b.w / 2, by = b.y + b.h;
       shadow(c, cx, by - h * 0.02, w * 0.56, h * 0.13, 0.34);
       c.translate(cx, by);
-      if (this.flip) c.scale(-1, 1);
       c.drawImage(im, -w / 2, -h, w, h);
     }
     c.restore();
