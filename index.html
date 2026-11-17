@@ -17,7 +17,9 @@
 html{scroll-behavior:smooth}
 body{font-family:var(--font);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;letter-spacing:-.01em}
 img{display:block;max-width:100%}
-button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit;-webkit-tap-highlight-color:transparent}
+*{-webkit-tap-highlight-color:transparent}
+.btn:active,.chip:active,.ar:active,.add:active,.sizes button:active{transform:scale(.97)}
 a{color:var(--blue);text-decoration:none}
 
 /* nav */
@@ -42,16 +44,25 @@ h1 span{background:linear-gradient(90deg,#0071e3,#7a5cff 45%,#ff5f6d);-webkit-ba
 .btn{display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 24px;border-radius:999px;font-size:17px;font-weight:500;transition:.2s}
 .btn.pri{background:var(--blue);color:#fff}.btn.pri:hover{background:var(--blue-h)}
 .btn.sec{color:var(--blue);border:1px solid var(--blue)}.btn.sec:hover{background:var(--blue);color:#fff}
-.hero-stage{position:relative;max-width:980px;margin:40px auto 0;height:min(40vw,380px)}
-.hero-stage img{position:absolute;left:50%;top:50%;width:min(64%,600px);transform:translate(-50%,-50%) rotate(-8deg);
-  filter:drop-shadow(0 40px 40px rgba(0,0,0,.18));animation:float 6s ease-in-out infinite}
-.hero-stage::after{content:"";position:absolute;left:50%;bottom:4%;width:54%;height:28px;transform:translateX(-50%);
-  background:radial-gradient(closest-side,rgba(0,0,0,.18),transparent);animation:shadow 6s ease-in-out infinite}
-@keyframes float{50%{transform:translate(-50%,-56%) rotate(-6deg)}}
-@keyframes shadow{50%{width:44%;opacity:.7}}
-.hero-dots{display:flex;gap:10px;justify-content:center;margin-top:10px}
-.hero-dots button{width:8px;height:8px;border-radius:50%;background:var(--line);transition:.3s}
-.hero-dots button.on{background:var(--ink);width:24px;border-radius:4px}
+.hero-car{position:relative;max-width:1100px;margin:34px auto 0;overflow:hidden;cursor:grab;user-select:none;-webkit-user-select:none}
+.hero-car.grabbing{cursor:grabbing}
+.hero-track{display:flex;will-change:transform}
+.hero-slide{flex:0 0 100%;height:clamp(230px,42vw,390px);position:relative;display:grid;place-items:center}
+.hero-slide .fl{width:min(64%,600px);animation:float 6s ease-in-out infinite}
+.hero-slide img{width:100%;pointer-events:none;filter:drop-shadow(0 40px 36px rgba(0,0,0,.18));will-change:transform}
+.hero-slide::after{content:"";position:absolute;left:50%;bottom:5%;width:50%;height:26px;transform:translateX(-50%);
+  background:radial-gradient(closest-side,rgba(0,0,0,.16),transparent);animation:shadow 6s ease-in-out infinite}
+@keyframes float{50%{transform:translateY(-14px)}}
+@keyframes shadow{50%{width:42%;opacity:.7}}
+.hero-meta{height:64px;margin-top:6px;display:grid;place-items:center}
+.hero-meta div{transition:opacity .35s,transform .45s cubic-bezier(.22,1,.36,1)}
+.hero-meta.swap div{opacity:0;transform:translateY(8px)}
+.hero-meta b{font-size:19px;font-weight:600;letter-spacing:-.02em}
+.hero-meta span{display:block;color:var(--mute);font-size:15px;margin-top:2px}
+.hero-meta a{cursor:pointer}
+.hero-dots{display:flex;gap:8px;justify-content:center;margin-top:12px;height:8px;align-items:center}
+.hero-dots button{height:8px;border-radius:4px;background:var(--line);padding:0;position:relative;overflow:hidden}
+.hero-dots button i{position:absolute;inset:0;background:var(--ink);transform-origin:left;transform:scaleX(0)}
 
 /* section */
 section{max-width:1080px;margin:0 auto;padding:70px 22px}
@@ -67,6 +78,7 @@ h2 small{display:block;color:var(--mute);font-weight:600}
 .card{background:#fff;border-radius:var(--r);padding:26px 26px 22px;position:relative;cursor:pointer;
   box-shadow:0 2px 12px rgba(0,0,0,.04);transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s;overflow:hidden}
 .card:hover{transform:translateY(-6px) scale(1.01);box-shadow:0 22px 50px rgba(0,0,0,.10)}
+.card:active{transform:scale(.975);transition-duration:.15s}
 .card .tag{font-size:12px;font-weight:600;color:#bf4800;letter-spacing:.02em;text-transform:uppercase}
 .card h3{font-size:24px;font-weight:600;letter-spacing:-.02em;margin-top:6px}
 .card p{color:var(--mute);font-size:15px;margin-top:4px}
@@ -96,14 +108,21 @@ footer{max-width:1080px;margin:0 auto;padding:30px 22px 60px;color:var(--mute);f
 /* sheet */
 .sheet{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   display:none;align-items:flex-end;justify-content:center}
-.sheet.on{display:flex;animation:fade .25s}
+.sheet.on{display:flex;animation:fade .3s}
+.sheet{transition:background-color .35s}
+.sheet.closing{background-color:rgba(0,0,0,0)!important}
+.sheet.closing .panel{transform:translate3d(0,110%,0)!important;transition:transform .38s cubic-bezier(.4,0,.6,1)!important}
+@media(min-width:900px){.sheet.closing .panel{transform:scale(.96)!important;opacity:0;transition:transform .3s,opacity .3s!important}}
+.grab{display:none}
+@media(max-width:899px){.grab{display:block;position:absolute;top:0;left:0;right:0;height:64px;z-index:4;touch-action:none}.grab::before{content:'';position:absolute;top:8px;left:50%;width:38px;height:5px;margin-left:-19px;border-radius:3px;background:rgba(0,0,0,.18)}}
 @keyframes fade{from{opacity:0}}
 .panel{width:min(1180px,100%);height:min(94vh,860px);background:#fff;border-radius:28px 28px 0 0;display:grid;grid-template-columns:1.35fr 1fr;
   overflow:hidden;animation:up .45s cubic-bezier(.2,.8,.2,1)}
 @media(min-width:900px){.sheet{align-items:center}.panel{border-radius:28px}}
 @keyframes up{from{transform:translateY(60px);opacity:0}}
 .viewer{position:relative;background:radial-gradient(120% 90% at 50% 30%,#ffffff 0%,#eef0f4 60%,#e3e6ec 100%)}
-model-viewer{width:100%;height:100%;--poster-color:transparent;--progress-bar-color:transparent}
+model-viewer{position:absolute;inset:0;width:100%;height:100%;opacity:0;pointer-events:none;--poster-color:transparent;--progress-bar-color:transparent}
+model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"]{opacity:1;pointer-events:auto}
 .close{position:absolute;top:16px;left:16px;z-index:5;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.8);
   backdrop-filter:blur(8px);display:grid;place-items:center;font-size:20px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
 .seg{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:5;display:flex;background:rgba(0,0,0,.06);padding:3px;border-radius:999px}
@@ -119,9 +138,11 @@ model-viewer{width:100%;height:100%;--poster-color:transparent;--progress-bar-co
 .gen-box li.cur{color:var(--blue);font-weight:600}
 .photos{position:absolute;inset:0;display:none;flex-direction:column;padding:70px 24px 22px}
 .photos.on{display:flex}
-.ph-main{flex:1;display:grid;place-items:center;min-height:0}
-.ph-main img{max-width:92%;max-height:100%;object-fit:contain;filter:drop-shadow(0 26px 28px rgba(0,0,0,.16));animation:phin .45s cubic-bezier(.2,.8,.2,1)}
-@keyframes phin{from{opacity:0;transform:translateX(18px)}}
+.ph-car{flex:1;min-height:0;overflow:hidden;cursor:grab;user-select:none;-webkit-user-select:none}
+.ph-car.grabbing{cursor:grabbing}
+.ph-track{display:flex;height:100%;will-change:transform}
+.ph-track div{flex:0 0 100%;display:grid;place-items:center;height:100%}
+.ph-track img{max-width:88%;max-height:100%;object-fit:contain;pointer-events:none;filter:drop-shadow(0 26px 28px rgba(0,0,0,.16))}
 .ph-thumbs{display:flex;gap:10px;justify-content:center;margin-top:14px}
 .ph-thumbs button{width:74px;height:56px;border-radius:14px;background:#fff;display:grid;place-items:center;padding:6px;box-shadow:0 1px 6px rgba(0,0,0,.06);transition:.2s;border:2px solid transparent}
 .ph-thumbs button.on{border-color:var(--ink)}
@@ -155,7 +176,7 @@ model-viewer{width:100%;height:100%;--poster-color:transparent;--progress-bar-co
   .info{padding:24px 22px 36px;overflow:visible}
   .how{grid-template-columns:1fr 1fr}
 }
-@media(max-width:560px){.how{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
+@media(max-width:560px){.hero-slide .fl{width:86%}.hero{padding-top:56px}.how{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -177,7 +198,8 @@ model-viewer{width:100%;height:100%;--poster-color:transparent;--progress-bar-co
     <a class="btn pri" href="#catalogo">Explorar catálogo</a>
     <a class="btn sec" href="#como">Como funciona o AR ›</a>
   </div>
-  <div class="hero-stage"><img id="heroImg" alt=""></div>
+  <div class="hero-car" id="heroCar"><div class="hero-track" id="heroTrack"></div></div>
+  <div class="hero-meta" id="heroMeta"><div></div></div>
   <div class="hero-dots" id="heroDots"></div>
 </div>
 
@@ -208,20 +230,15 @@ model-viewer{width:100%;height:100%;--poster-color:transparent;--progress-bar-co
 <div class="sheet" id="sheet">
   <div class="panel">
     <div class="viewer">
+      <div class="grab" id="grab"></div>
       <button class="close" id="close" aria-label="Fechar">×</button>
-      <div class="seg"><button class="on" data-v="ph">Fotos</button><button data-v="3d" id="seg3d">3D</button></div>
-      <model-viewer id="mv" camera-controls touch-action="pan-y" field-of-view="28deg"
+            <model-viewer id="mv" camera-controls touch-action="pan-y" field-of-view="28deg"
         shadow-intensity="1.1" shadow-softness=".9" exposure="1.05" environment-image="neutral"
         camera-orbit="-28deg 74deg auto" min-camera-orbit="auto 10deg auto" max-camera-orbit="auto 100deg auto"
         interaction-prompt="none" ar ar-modes="webxr quick-look scene-viewer" ar-placement="floor" ar-scale="fixed">
         <button slot="ar-button" style="display:none"></button>
       </model-viewer>
       <div class="photos" id="photos"></div>
-      <div class="gen" id="gen"><div class="gen-box">
-        <div class="gen-ring"></div><h4>Gerando modelo 3D</h4>
-        <ol id="genSteps"><li>Lendo as fotos</li><li>Montando textura</li><li>Modelando a superfície</li><li>Empacotando .glb</li></ol>
-      </div></div>
-      <div class="hint" id="hint">Arraste para girar · pinça para zoom</div>
     </div>
     <div class="info">
       <div class="tag" id="pTag"></div>
@@ -244,6 +261,7 @@ model-viewer{width:100%;height:100%;--poster-color:transparent;--progress-bar-co
 
 <script type="module">
 import { generateModel } from './gen3d.js';
+import { Swiper, dragToClose, haptic } from './swipe.js';
 
 const PRODUCTS = [
   { id:'aj1', brand:'Jordan', tag:'Edição limitada', name:'Air Jordan 1 Low', nick:'Panda Prank · Dragon', sku:'553558-065', price:1099,
@@ -261,20 +279,57 @@ const img = (p, k) => `img/${p.id}_${k}.webp`;
 const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const $ = (s) => document.querySelector(s);
 
-/* hero carrossel */
-let hi = 0;
-const dots = $('#heroDots');
-PRODUCTS.forEach((p, i) => { const b = document.createElement('button'); b.onclick = () => setHero(i); dots.append(b); });
-function setHero(i) {
-  hi = i; const im = $('#heroImg');
-  im.style.opacity = 0;
-  setTimeout(() => { im.src = img(PRODUCTS[i], 'lat'); im.style.opacity = 1; }, 180);
-  [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i));
+/* hero carrossel — arrastável, com inércia e parallax */
+const track = $('#heroTrack'), dots = $('#heroDots'), meta = $('#heroMeta');
+PRODUCTS.forEach((p, i) => {
+  track.insertAdjacentHTML('beforeend', `<div class="hero-slide"><div class="fl" style="animation-delay:${-i * 1.2}s"><img src="${img(p, 'lat')}" alt="${p.name}"></div></div>`);
+  const d = document.createElement('button'); d.innerHTML = '<i></i>'; d.setAttribute('aria-label', p.name);
+  d.onclick = () => { hero.goTo(i); pauseAuto(); }; dots.append(d);
+});
+const heroImgs = [...track.querySelectorAll('img')], dotEls = [...dots.children];
+function setMeta(i) {
+  const p = PRODUCTS[i];
+  meta.classList.add('swap');
+  setTimeout(() => {
+    meta.firstElementChild.innerHTML = `<b>${p.name} “${p.nick}”</b><span>${brl(p.price)} · <a data-open="${p.id}">Ver detalhes ›</a></span>`;
+    meta.classList.remove('swap');
+  }, 180);
 }
-$('#heroImg').style.transition = 'opacity .35s';
-$('#heroImg').onclick = () => open(PRODUCTS[hi]);
-$('#heroImg').style.cursor = 'pointer';
-setHero(0); setInterval(() => setHero((hi + 1) % PRODUCTS.length), 4500);
+meta.onclick = (e) => { const id = e.target.dataset?.open; if (id) open(PRODUCTS.find((p) => p.id === id)); };
+const hero = new Swiper($('#heroCar'), track, {
+  loop: true,
+  onProgress(pos) {
+    heroImgs.forEach((im, i) => {
+      const d = i - pos, ad = Math.min(Math.abs(d), 1.5);
+      im.style.transform = `translateX(${d * -22}%) rotate(${-8 + d * 14}deg) scale(${1 - ad * 0.18})`;
+      im.style.opacity = 1 - ad * 0.55;
+    });
+    dotEls.forEach((el, k) => {
+      const f = Math.max(0, 1 - Math.abs(pos - k));
+      el.style.width = 8 + 18 * f + 'px';
+      el.style.background = f > 0.5 ? '#86868b' : '';
+    });
+  },
+  onChange(i) { setMeta(i); restartTimer(); },
+  onGrab() { paused = true; },
+  onRelease() { pauseAuto(); },
+});
+$('#heroCar').addEventListener('click', () => { if (!hero.moved) open(PRODUCTS[hero.index]); });
+// avanço automático com barra de progresso no indicador ativo; pausa quando o usuário interage
+let paused = false, resumeT, tStart = performance.now();
+const AUTO = 5000;
+function pauseAuto() { paused = true; clearTimeout(resumeT); resumeT = setTimeout(() => { paused = false; restartTimer(); }, 6000); }
+function restartTimer() { tStart = performance.now(); }
+(function loop() {
+  const el = dotEls[hero.index]?.firstElementChild;
+  if (!paused && !document.hidden && !$('#sheet').classList.contains('on')) {
+    const f = (performance.now() - tStart) / AUTO;
+    dotEls.forEach((d, k) => d.firstElementChild.style.transform = `scaleX(${k === hero.index ? Math.min(f, 1) : 0})`);
+    if (f >= 1) { hero.next(); restartTimer(); }
+  } else { restartTimer(); dotEls.forEach((d) => d.firstElementChild.style.transform = 'scaleX(0)'); }
+  requestAnimationFrame(loop);
+})();
+setMeta(0);
 
 /* filtros + grid */
 const brands = ['Todos', ...new Set(PRODUCTS.map((p) => p.brand))];
@@ -292,7 +347,7 @@ function render() {
       <div class="tag">${p.tag}</div><h3>${p.name}</h3><p>${p.nick}</p>
       <div class="shot"><img src="${img(p, 'lat')}" alt="${p.name}" loading="lazy"></div>
       <div class="row"><span class="price">${brl(p.price)}</span>
-      <span class="badge3d"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z"/><path d="m3 7 9 5 9-5M12 12v10"/></svg>Ver em 3D e AR</span></div>`;
+      <span class="badge3d"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z"/><path d="m3 7 9 5 9-5M12 12v10"/></svg>Ver no seu espaço</span></div>`;
     el.onclick = () => open(p);
     $('#grid').append(el);
   });
@@ -303,16 +358,7 @@ render();
 const mv = $('#mv'); let cur = null, size = null;
 const bag = [];
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('on'), 2200); }
-let view = 'ph', modelReady = false;
-function setView(v) {
-  view = v;
-  document.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
-  $('#photos').classList.toggle('on', v === 'ph'); mv.style.visibility = v === 'ph' ? 'hidden' : 'visible';
-  $('#hint').style.display = v === 'ph' ? 'none' : '';
-  $('#gen').classList.toggle('off', v === 'ph' || modelReady);
-}
-function set3dLabel(ready) { $('#seg3d').innerHTML = ready ? '3D' : '3D<span class="dot"></span>'; }
-document.querySelectorAll('.seg button').forEach((b) => b.onclick = () => setView(b.dataset.v));
+let modelReady = false;
 
 async function open(p) {
   cur = p; size = null;
@@ -322,31 +368,28 @@ async function open(p) {
   $('#sizes').innerHTML = '';
   [36,37,38,39,40,41,42,43].forEach((s) => {
     const b = document.createElement('button'); b.textContent = s;
-    b.onclick = () => { size = s; document.querySelectorAll('#sizes button').forEach((x) => x.classList.toggle('on', x === b)); };
+    b.onclick = () => { size = s; haptic(); document.querySelectorAll('#sizes button').forEach((x) => x.classList.toggle('on', x === b)); };
     $('#sizes').append(b);
   });
   const shots = ['lat', 'med', '04', '03'];
-  $('#photos').innerHTML = `<div class="ph-main"><img id="phMain" src="${img(p, 'lat')}" alt="${p.name}"></div>
-    <div class="ph-thumbs">${shots.map((k, i) => `<button class="${i ? '' : 'on'}" data-k="${k}"><img src="${img(p, k)}" alt=""></button>`).join('')}</div>`;
-  document.querySelectorAll('.ph-thumbs button').forEach((b) => b.onclick = () => {
-    document.querySelectorAll('.ph-thumbs button').forEach((x) => x.classList.toggle('on', x === b));
-    const m = $('#phMain'); m.src = img(p, b.dataset.k); m.style.animation = 'none'; m.offsetHeight; m.style.animation = '';
-  });
-  modelReady = false; set3dLabel(false);
-  setView('ph');
-  $('#sheet').classList.add('on'); document.body.style.overflow = 'hidden';
+  $('#photos').innerHTML = `<div class="ph-car" id="phCar"><div class="ph-track" id="phTrack">${shots.map((k) => `<div><img src="${img(p, k)}" alt="${p.name}"></div>`).join('')}</div></div>
+    <div class="ph-thumbs">${shots.map((k, i) => `<button class="${i ? '' : 'on'}" data-i="${i}"><img src="${img(p, k)}" alt=""></button>`).join('')}</div>`;
+  const thumbs = [...document.querySelectorAll('.ph-thumbs button')];
+  const ph = new Swiper($('#phCar'), $('#phTrack'), { onChange: (i) => thumbs.forEach((x, k) => x.classList.toggle('on', k === i)) });
+  thumbs.forEach((b) => b.onclick = () => ph.goTo(+b.dataset.i));
+  modelReady = false;
+  $('#photos').classList.add('on');
+  const sh = $('#sheet'); sh.classList.remove('closing'); sh.style.backgroundColor = ''; $('.panel').style.transform = ''; $('.panel').style.transition = '';
+  sh.classList.add('on'); document.body.style.overflow = 'hidden'; $('.panel').scrollTop = 0;
   if (location.hash !== '#' + p.id) history.replaceState(null, '', '#' + p.id);
 
-  // 3D gerado em segundo plano enquanto o cliente vê as fotos
-  const steps = [...document.querySelectorAll('#genSteps li')];
-  steps.forEach((s) => s.className = '');
+  // modelo 3D gerado em segundo plano, usado só no AR ("Ver no seu espaço")
   mv.removeAttribute('src');
   await new Promise((r) => setTimeout(r, 350)); // deixa a ficha abrir suave antes de gerar
   if (cur !== p) return;
-  const url = await generateModel(img(p, 'lat'), img(p, 'med'), (i) => steps.forEach((s, k) => s.className = k < i ? 'done' : k === i ? 'cur' : ''));
-  steps.forEach((s) => s.className = 'done');
+  const url = await generateModel(img(p, 'lat'), img(p, 'med'));
   if (cur !== p) return;
-  mv.addEventListener('load', () => { if (cur !== p) return; modelReady = true; set3dLabel(true); setView(view); updateArNote(); }, { once: true });
+  mv.addEventListener('load', () => { if (cur !== p) return; modelReady = true; updateArNote(); }, { once: true });
   mv.src = url;
   mv.cameraOrbit = '-28deg 74deg auto'; mv.jumpCameraToGoal?.();
 }
@@ -356,7 +399,12 @@ function updateArNote() {
     ? 'Aponte a câmera para o chão. O tênis aparece em tamanho real.'
     : 'Realidade aumentada disponível ao abrir este site no celular (iPhone com Safari ou Android com Chrome).';
 }
-function close() { $('#sheet').classList.remove('on'); document.body.style.overflow = ''; cur = null; history.replaceState(null, '', location.pathname); }
+function close() {
+  const sh = $('#sheet'); if (!sh.classList.contains('on') || sh.classList.contains('closing')) return;
+  sh.classList.add('closing'); cur = null; history.replaceState(null, '', location.pathname);
+  setTimeout(() => { sh.classList.remove('on', 'closing'); sh.style.backgroundColor = ''; $('.panel').style.transform = ''; $('.panel').style.transition = ''; document.body.style.overflow = ''; }, 380);
+}
+dragToClose($('#grab'), $('.panel'), $('#sheet'), close);
 $('#close').onclick = close;
 $('#sheet').onclick = (e) => { if (e.target.id === 'sheet') close(); };
 addEventListener('keydown', (e) => e.key === 'Escape' && close());
