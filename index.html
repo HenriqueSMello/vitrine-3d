@@ -6,6 +6,7 @@
 <title>Vitrine 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"}}</script>
 <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.0.0/dist/model-viewer.min.js"></script>
 <style>
 :root{
@@ -181,6 +182,28 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
   padding:12px 20px;border-radius:14px;font-size:14px;transition:.35s;pointer-events:none}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 
+/* provador no pé */
+.tryfoot{margin-top:26px;height:56px;border-radius:16px;color:#fff;font-size:17px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px;
+  background:linear-gradient(100deg,#0071e3,#7a5cff 55%,#ff5f6d);background-size:160% 100%;transition:background-position .6s,transform .15s}
+.tryfoot:hover{background-position:100% 0}.tryfoot:active{transform:scale(.97)}
+.tryfoot + .ar{margin-top:10px}
+.tryon{position:fixed;inset:0;z-index:90;background:#000;display:none;color:#fff}
+.tryon.on{display:block;animation:fade .3s}
+.to-stage{position:absolute;inset:0;overflow:hidden}
+.to-stage video,.to-stage canvas{position:absolute;inset:0;width:100%;height:100%}
+.to-stage video{object-fit:cover}
+.tryon.mirror .to-stage{transform:scaleX(-1)}
+.to-top{position:absolute;top:max(14px,env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;align-items:center;z-index:3}
+.to-btn{width:42px;height:42px;border-radius:50%;background:rgba(0,0,0,.42);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:grid;place-items:center;color:#fff;font-size:22px}
+.to-status{padding:9px 14px;border-radius:999px;background:rgba(0,0,0,.42);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);font-size:14px;font-weight:500}
+.to-bottom{position:absolute;left:0;right:0;bottom:max(24px,env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:center;gap:44px;z-index:3}
+.to-shot{width:72px;height:72px;border-radius:50%;border:4px solid #fff;background:rgba(255,255,255,.25);transition:transform .15s}
+.to-shot:active{transform:scale(.9)}
+.to-hint{position:absolute;left:50%;bottom:130px;transform:translateX(-50%);width:min(88%,380px);text-align:center;font-size:14px;line-height:1.45;
+  background:rgba(0,0,0,.45);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:12px 16px;border-radius:16px;z-index:3;transition:opacity .5s}
+.to-prev{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px}
+.to-prev.on{display:flex}.to-prev img{max-width:100%;max-height:72vh;border-radius:18px}
+.to-prev p{font-size:13px;color:#ccc}
 @media(max-width:899px){
   .nav nav{display:none}
   .panel{grid-template-columns:1fr;grid-template-rows:48vh auto;overflow:auto}
@@ -255,6 +278,10 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
       <p class="desc" id="pDesc"></p>
       <div class="label">Tamanho (BR)</div>
       <div class="sizes" id="sizes"></div>
+      <button class="tryfoot" id="footBtn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M3 15c3 0 4-1 5-3l2-5 3 1c1 2 2 4 5 5 2 .6 3 1.5 3 3v2H3v-3Z"/><path d="M3 18h18"/></svg>
+        Provar no pé
+      </button>
       <button class="ar" id="arBtn">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z"/><path d="m3 7 9 5 9-5M12 12v10"/></svg>
         Ver no seu espaço
@@ -264,11 +291,20 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
     </div>
   </div>
 </div>
+<div class="tryon" id="tryon">
+  <div class="to-stage"><video playsinline muted></video></div>
+  <div class="to-top"><button class="to-btn" id="toClose" aria-label="Fechar">×</button><div class="to-status">Abrindo a câmera…</div>
+    <button class="to-btn" id="toFlip" aria-label="Trocar câmera"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M9 13a3 3 0 0 0 5.2 2M15 12a3 3 0 0 0-5.2-2"/></svg></button></div>
+  <div class="to-hint" id="toHint">Aponte a câmera para os seus pés, de lado, a cerca de 1 metro, com as canelas aparecendo. Dá para usar a câmera frontal num espelho também.</div>
+  <div class="to-bottom"><button class="to-shot" id="toShot" aria-label="Tirar foto"></button></div>
+  <div class="to-prev" id="toPrev"><img alt="Foto do provador"><p>Segure a foto para salvar</p><button class="btn pri" id="toPrevOk">Voltar</button></div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script type="module">
 import { generateModel } from './gen3d.js';
 import { Swiper, FreeStrip, dragToClose, haptic } from './swipe.js';
+let tryon = null; const loadTryOn = async () => tryon ??= new (await import('./tryon.js')).TryOn(document.querySelector('#tryon'));
 
 const PRODUCTS = [
   { id:'aj1', tint:['#cdeedb','#ece7d6','#e3f3ea'], brand:'Jordan', tag:'Edição limitada', name:'Air Jordan 1 Low', nick:'Panda Prank · Dragon', sku:'553558-065', price:1099,
@@ -419,6 +455,34 @@ $('#arBtn').onclick = async () => {
   if (mv.canActivateAR) mv.activateAR();
   else toast('Abra no celular para ver o tênis no seu espaço 📱');
 };
+/* provador no pé */
+let modelUrl = null;
+$('#footBtn').onclick = async () => {
+  if (!navigator.mediaDevices?.getUserMedia) { toast('Este navegador não libera a câmera'); return; }
+  const p = cur, ov = $('#tryon');
+  ov.classList.add('on'); $('#toHint').style.opacity = 1;
+  try {
+    const [t, url] = await Promise.all([loadTryOn(), generateModel(img(p, 'lat'), img(p, 'med'))]);
+    await t.setModel(url);
+    await t.start();
+    setTimeout(() => $('#toHint').style.opacity = 0, 6000);
+  } catch (e) {
+    console.error(e);
+    ov.classList.remove('on'); tryon?.stop();
+    toast(e?.name === 'NotAllowedError' ? 'Permita o acesso à câmera para provar' : 'Não foi possível abrir o provador');
+  }
+};
+$('#toClose').onclick = () => { tryon?.stop(); $('#tryon').classList.remove('on'); };
+$('#toFlip').onclick = () => tryon?.flip().catch(() => toast('Não foi possível trocar a câmera'));
+$('#toShot').onclick = async () => {
+  if (!tryon) return; haptic();
+  const blob = await tryon.snapshot();
+  const file = new File([blob], 'vitrine-3d.jpg', { type: 'image/jpeg' });
+  if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: 'Vitrine 3D' }); return; } catch {} }
+  const pv = $('#toPrev'); pv.querySelector('img').src = URL.createObjectURL(blob); pv.classList.add('on');
+};
+$('#toPrevOk').onclick = () => $('#toPrev').classList.remove('on');
+
 $('#addBtn').onclick = () => {
   if (!size) { toast('Escolha um tamanho'); return; }
   bag.push({ id: cur.id, size }); $('#bagCount').textContent = bag.length; $('#bagCount').classList.add('on');
