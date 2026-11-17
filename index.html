@@ -55,8 +55,7 @@ h1 span{background:linear-gradient(90deg,#0071e3,#7a5cff 45%,#ff5f6d);-webkit-ba
 @keyframes float{50%{transform:translateY(-14px)}}
 @keyframes shadow{50%{width:42%;opacity:.7}}
 .hero-meta{height:64px;margin-top:6px;display:grid;place-items:center}
-.hero-meta div{transition:opacity .35s,transform .45s cubic-bezier(.22,1,.36,1)}
-.hero-meta.swap div{opacity:0;transform:translateY(8px)}
+.hero-meta div{will-change:opacity,transform}
 .hero-meta b{font-size:19px;font-weight:600;letter-spacing:-.02em}
 .hero-meta span{display:block;color:var(--mute);font-size:15px;margin-top:2px}
 .hero-meta a{cursor:pointer}
@@ -136,17 +135,18 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
 .gen-box h4{font-size:17px}.gen-box ol{list-style:none;margin-top:12px;font-size:14px;color:var(--mute)}
 .gen-box li{padding:3px 0;transition:.3s}.gen-box li.done{color:var(--ink)}.gen-box li.done::before{content:"✓ ";color:#1a9d4b}
 .gen-box li.cur{color:var(--blue);font-weight:600}
-.photos{position:absolute;inset:0;display:none;flex-direction:column;padding:70px 24px 22px}
+.photos{position:absolute;inset:0;display:none;flex-direction:column;padding:64px 16px 18px}
 .photos.on{display:flex}
-.ph-car{flex:1;min-height:0;overflow:hidden;cursor:grab;user-select:none;-webkit-user-select:none}
+.ph-car{flex:1;min-height:0;position:relative;overflow:hidden;cursor:grab;user-select:none;-webkit-user-select:none}
 .ph-car.grabbing{cursor:grabbing}
-.ph-track{display:flex;height:100%;will-change:transform}
-.ph-track div{flex:0 0 100%;display:grid;place-items:center;height:100%}
-.ph-track img{max-width:88%;max-height:100%;object-fit:contain;pointer-events:none;filter:drop-shadow(0 26px 28px rgba(0,0,0,.16))}
+.ph-track{position:absolute;inset:0;display:flex;will-change:transform}
+.ph-track div{flex:0 0 100%;width:100%;height:100%;padding:2% 7% 4%;box-sizing:border-box}
+.ph-track img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none;filter:drop-shadow(0 22px 22px rgba(0,0,0,.15))}
 .ph-thumbs{display:flex;gap:10px;justify-content:center;margin-top:14px}
 .ph-thumbs button{width:74px;height:56px;border-radius:14px;background:#fff;display:grid;place-items:center;padding:6px;box-shadow:0 1px 6px rgba(0,0,0,.06);transition:.2s;border:2px solid transparent}
 .ph-thumbs button.on{border-color:var(--ink)}
-.ph-thumbs img{max-width:100%;max-height:100%;object-fit:contain}
+.ph-thumbs button{overflow:hidden;flex:0 0 auto}
+.ph-thumbs img{display:block;width:100%;height:100%;object-fit:contain}
 .seg button .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-left:6px;vertical-align:middle;animation:pulse 1s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.25}}
 .hint{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--mute);background:rgba(255,255,255,.75);
@@ -287,13 +287,11 @@ PRODUCTS.forEach((p, i) => {
   d.onclick = () => { hero.goTo(i); pauseAuto(); }; dots.append(d);
 });
 const heroImgs = [...track.querySelectorAll('img')], dotEls = [...dots.children];
+let metaIdx = -1;
 function setMeta(i) {
+  if (i === metaIdx) return; metaIdx = i;
   const p = PRODUCTS[i];
-  meta.classList.add('swap');
-  setTimeout(() => {
-    meta.firstElementChild.innerHTML = `<b>${p.name} “${p.nick}”</b><span>${brl(p.price)} · <a data-open="${p.id}">Ver detalhes ›</a></span>`;
-    meta.classList.remove('swap');
-  }, 180);
+  meta.firstElementChild.innerHTML = `<b>${p.name} “${p.nick}”</b><span>${brl(p.price)} · <a data-open="${p.id}">Ver detalhes ›</a></span>`;
 }
 meta.onclick = (e) => { const id = e.target.dataset?.open; if (id) open(PRODUCTS.find((p) => p.id === id)); };
 const hero = new Swiper($('#heroCar'), track, {
@@ -301,23 +299,30 @@ const hero = new Swiper($('#heroCar'), track, {
   onProgress(pos) {
     heroImgs.forEach((im, i) => {
       const d = i - pos, ad = Math.min(Math.abs(d), 1.5);
-      im.style.transform = `translateX(${d * -22}%) rotate(${-8 + d * 14}deg) scale(${1 - ad * 0.18})`;
-      im.style.opacity = 1 - ad * 0.55;
+      const e = ad * ad * (3 - 2 * Math.min(ad, 1));   // suaviza (smoothstep)
+      im.style.transform = `translate3d(${d * -18}%,0,0) rotate(${-8 + d * 9}deg) scale(${1 - e * 0.14})`;
+      im.style.opacity = 1 - Math.min(e, 1) * 0.6;
     });
+    // legenda: troca no meio do caminho, com fade/slide contínuo acompanhando o gesto
+    const n = ((Math.round(pos) % PRODUCTS.length) + PRODUCTS.length) % PRODUCTS.length;
+    setMeta(n);
+    const f = Math.min(Math.abs(pos - Math.round(pos)) * 2, 1), dir = Math.sign(pos - Math.round(pos));
+    meta.firstElementChild.style.opacity = 1 - f;
+    meta.firstElementChild.style.transform = `translate3d(${-dir * f * 24}px,0,0)`;
     dotEls.forEach((el, k) => {
       const f = Math.max(0, 1 - Math.abs(pos - k));
       el.style.width = 8 + 18 * f + 'px';
       el.style.background = f > 0.5 ? '#86868b' : '';
     });
   },
-  onChange(i) { setMeta(i); restartTimer(); },
+  onChange() { restartTimer(); },
   onGrab() { paused = true; },
   onRelease() { pauseAuto(); },
 });
 $('#heroCar').addEventListener('click', () => { if (!hero.moved) open(PRODUCTS[hero.index]); });
 // avanço automático com barra de progresso no indicador ativo; pausa quando o usuário interage
 let paused = false, resumeT, tStart = performance.now();
-const AUTO = 5000;
+const AUTO = 5500;
 function pauseAuto() { paused = true; clearTimeout(resumeT); resumeT = setTimeout(() => { paused = false; restartTimer(); }, 6000); }
 function restartTimer() { tStart = performance.now(); }
 (function loop() {
@@ -325,7 +330,7 @@ function restartTimer() { tStart = performance.now(); }
   if (!paused && !document.hidden && !$('#sheet').classList.contains('on')) {
     const f = (performance.now() - tStart) / AUTO;
     dotEls.forEach((d, k) => d.firstElementChild.style.transform = `scaleX(${k === hero.index ? Math.min(f, 1) : 0})`);
-    if (f >= 1) { hero.next(); restartTimer(); }
+    if (f >= 1) { hero.next({ soft: true }); restartTimer(); }
   } else { restartTimer(); dotEls.forEach((d) => d.firstElementChild.style.transform = 'scaleX(0)'); }
   requestAnimationFrame(loop);
 })();
