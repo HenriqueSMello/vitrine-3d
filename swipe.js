@@ -181,3 +181,102 @@ export function dragToClose(handle, panel, backdrop, onClose, canStart = () => t
   };
   addEventListener('pointerup', end); addEventListener('pointercancel', end);
 }
+
+/**
+ * Faixa contínua (sem encaixe): o conteúdo segue o dedo, desliza com inércia e para onde a
+ * física mandar — inclusive entre dois tênis. Loop infinito e deriva lenta quando ninguém mexe.
+ * opts.slideWidth(W) -> largura de cada item em px
+ * opts.onFrame(pos, items, sw) -> chamado a cada frame (pos contínuo em "itens")
+ * opts.drift  -> velocidade da deriva automática (itens/s)
+ */
+export class FreeStrip {
+  constructor(viewport, items, opts = {}) {
+    Object.assign(this, { viewport, items, opts, pos: 0, vel: 0, dragging: false, moved: false, lastTouch: -1e9 });
+    this.n = items.length;
+    viewport.style.touchAction = 'pan-y';
+    viewport.addEventListener('pointerdown', (e) => this.down(e));
+    addEventListener('pointermove', (e) => this.move(e), { passive: false });
+    addEventListener('pointerup', (e) => this.up(e));
+    addEventListener('pointercancel', (e) => this.up(e));
+    viewport.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
+    viewport.addEventListener('click', (e) => { if (this.moved) { e.stopPropagation(); e.preventDefault(); } }, true);
+    viewport.addEventListener('dragstart', (e) => e.preventDefault());
+    this.last = performance.now();
+    const loop = (now) => { this.tick(now); requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
+  }
+  get sw() { return this.opts.slideWidth ? this.opts.slideWidth(this.viewport.clientWidth) : this.viewport.clientWidth * 0.5; }
+  wrap(d) { const n = this.n; return ((d % n) + n * 1.5) % n - n / 2; }   // distância circular em [-n/2, n/2)
+  tick(now) {
+    const dt = Math.min((now - this.last) / 1000, 1 / 20); this.last = now;
+    if (!this.dragging) {
+      const idle = now - this.lastTouch > (this.opts.idleMs ?? 2600) && !this.paused;
+      const drift = idle ? (this.opts.drift ?? 0.09) : 0;
+      // atrito exponencial (parecido com a desaceleração do iOS) + aproximação suave da deriva
+      const fr = Math.exp(-dt * 2.6);
+      this.vel = drift + (this.vel - drift) * (idle ? Math.exp(-dt * 1.2) : fr);
+      this.pos += this.vel * dt;
+    }
+    const sw = this.sw;
+    this.items.forEach((el, i) => {
+      const d = this.wrap(i - this.pos);
+      el.style.transform = `translate3d(${(d * sw).toFixed(2)}px,0,0)`;
+      el._d = d;
+    });
+    this.opts.onFrame?.(this.pos, this.items, sw);
+  }
+  touch() { this.lastTouch = performance.now(); }
+  down(e) {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    this.dragging = true; this.locked = null; this.moved = false; this.pid = e.pointerId;
+    this.start = { x: e.clientX, y: e.clientY, pos: this.pos };
+    this.hist = [{ x: e.clientX, t: e.timeStamp || performance.now() }];
+    this.vel = 0; this.touch();
+  }
+  move(e) {
+    if (!this.dragging || e.pointerId !== this.pid) return;
+    const dx = e.clientX - this.start.x, dy = e.clientY - this.start.y;
+    if (!this.locked) {
+      if (Math.hypot(dx, dy) < 5) return;
+      this.locked = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      if (this.locked === 'y') { this.dragging = false; return; }
+      try { this.viewport.setPointerCapture(this.pid); } catch {}
+      this.viewport.classList.add('grabbing');
+      this.start.x = e.clientX; this.start.pos = this.pos;
+    }
+    e.preventDefault();
+    this.moved = true;
+    this.pos = this.start.pos - (e.clientX - this.start.x) / this.sw;
+    this.hist.push({ x: e.clientX, t: e.timeStamp || performance.now() });
+    if (this.hist.length > 8) this.hist.shift();
+    this.touch();
+  }
+  up(e) {
+    if (!this.dragging || e.pointerId !== this.pid) return;
+    this.dragging = false;
+    this.viewport.classList.remove('grabbing');
+    if (this.moved) {
+      const h = this.hist, b = h[h.length - 1];
+      let a = h[0]; for (const p of h) if (b.t - p.t <= 90) { a = p; break; }
+      const vpx = (b.x - a.x) / Math.max(1, b.t - a.t);
+      this.vel = Math.max(-6, Math.min(6, -vpx * 1000 / this.sw));
+    }
+    this.touch();
+    setTimeout(() => { this.moved = false; }, 0);
+  }
+  wheel(e) {
+    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    e.preventDefault();
+    this.pos += e.deltaX / this.sw;
+    this.vel = 0; this.touch();
+    // pequena inércia ao terminar o gesto do trackpad
+    clearTimeout(this.wt); const v = e.deltaX / this.sw * 50;
+    this.wt = setTimeout(() => { this.vel = Math.max(-3, Math.min(3, v)); this.touch(); }, 60);
+  }
+  goTo(i) {   // anima até o item i pelo caminho mais curto (usado pelos indicadores)
+    const d = this.wrap(i - this.pos);
+    this.vel = d * 2.6;   // com o atrito acima, percorre ~d itens
+    this.touch();
+  }
+  nearest() { return ((Math.round(this.pos) % this.n) + this.n) % this.n; }
+}

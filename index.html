@@ -44,24 +44,21 @@ h1 span{background:linear-gradient(90deg,#0071e3,#7a5cff 45%,#ff5f6d);-webkit-ba
 .btn{display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 24px;border-radius:999px;font-size:17px;font-weight:500;transition:.2s}
 .btn.pri{background:var(--blue);color:#fff}.btn.pri:hover{background:var(--blue-h)}
 .btn.sec{color:var(--blue);border:1px solid var(--blue)}.btn.sec:hover{background:var(--blue);color:#fff}
-.hero-car{position:relative;max-width:1100px;margin:34px auto 0;overflow:hidden;cursor:grab;user-select:none;-webkit-user-select:none}
+.hero-car{position:relative;margin:30px auto 0;overflow:hidden;cursor:grab;user-select:none;-webkit-user-select:none;
+  height:clamp(240px,40vw,420px);-webkit-mask-image:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent);mask-image:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)}
 .hero-car.grabbing{cursor:grabbing}
-.hero-track{display:flex;will-change:transform}
-.hero-slide{flex:0 0 100%;height:clamp(230px,42vw,390px);position:relative;display:grid;place-items:center}
-.hero-slide .fl{width:min(64%,600px);animation:float 6s ease-in-out infinite}
-.hero-slide img{width:100%;pointer-events:none;filter:drop-shadow(0 40px 36px rgba(0,0,0,.18));will-change:transform}
-.hero-slide::after{content:"";position:absolute;left:50%;bottom:5%;width:50%;height:26px;transform:translateX(-50%);
-  background:radial-gradient(closest-side,rgba(0,0,0,.16),transparent);animation:shadow 6s ease-in-out infinite}
-@keyframes float{50%{transform:translateY(-14px)}}
-@keyframes shadow{50%{width:42%;opacity:.7}}
+.hero-track{position:absolute;inset:0}
+.hero-slide{position:absolute;top:0;left:50%;height:100%;width:var(--sw,46vw);margin-left:calc(var(--sw,46vw) / -2);display:grid;place-items:center;will-change:transform}
+.hero-slide .fl{width:88%;animation:float 6s ease-in-out infinite}
+.hero-slide img{width:100%;pointer-events:none;filter:drop-shadow(0 34px 30px rgba(0,0,0,.17));will-change:transform,opacity}
+@keyframes float{50%{transform:translateY(-12px)}}
 .hero-meta{height:64px;margin-top:6px;display:grid;place-items:center}
 .hero-meta div{will-change:opacity,transform}
 .hero-meta b{font-size:19px;font-weight:600;letter-spacing:-.02em}
 .hero-meta span{display:block;color:var(--mute);font-size:15px;margin-top:2px}
 .hero-meta a{cursor:pointer}
 .hero-dots{display:flex;gap:8px;justify-content:center;margin-top:12px;height:8px;align-items:center}
-.hero-dots button{height:8px;border-radius:4px;background:var(--line);padding:0;position:relative;overflow:hidden}
-.hero-dots button i{position:absolute;inset:0;background:var(--ink);transform-origin:left;transform:scaleX(0)}
+.hero-dots button{height:8px;width:8px;border-radius:4px;background:var(--line);padding:0}
 
 /* section */
 section{max-width:1080px;margin:0 auto;padding:70px 22px}
@@ -176,7 +173,7 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
   .info{padding:24px 22px 36px;overflow:visible}
   .how{grid-template-columns:1fr 1fr}
 }
-@media(max-width:560px){.hero-slide .fl{width:86%}.hero{padding-top:56px}.how{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
+@media(max-width:560px){.hero{padding-top:56px}.how{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -261,7 +258,7 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
 
 <script type="module">
 import { generateModel } from './gen3d.js';
-import { Swiper, dragToClose, haptic } from './swipe.js';
+import { Swiper, FreeStrip, dragToClose, haptic } from './swipe.js';
 
 const PRODUCTS = [
   { id:'aj1', brand:'Jordan', tag:'Edição limitada', name:'Air Jordan 1 Low', nick:'Panda Prank · Dragon', sku:'553558-065', price:1099,
@@ -279,14 +276,14 @@ const img = (p, k) => `img/${p.id}_${k}.webp`;
 const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const $ = (s) => document.querySelector(s);
 
-/* hero carrossel — arrastável, com inércia e parallax */
-const track = $('#heroTrack'), dots = $('#heroDots'), meta = $('#heroMeta');
+/* hero: faixa contínua, livre (sem encaixe), com inércia, loop infinito e deriva lenta */
+const track = $('#heroTrack'), dots = $('#heroDots'), meta = $('#heroMeta'), car = $('#heroCar');
 PRODUCTS.forEach((p, i) => {
-  track.insertAdjacentHTML('beforeend', `<div class="hero-slide"><div class="fl" style="animation-delay:${-i * 1.2}s"><img src="${img(p, 'lat')}" alt="${p.name}"></div></div>`);
-  const d = document.createElement('button'); d.innerHTML = '<i></i>'; d.setAttribute('aria-label', p.name);
-  d.onclick = () => { hero.goTo(i); pauseAuto(); }; dots.append(d);
+  track.insertAdjacentHTML('beforeend', `<div class="hero-slide" data-i="${i}"><div class="fl" style="animation-delay:${-i * 1.3}s"><img src="${img(p, 'lat')}" alt="${p.name}"></div></div>`);
+  const d = document.createElement('button'); d.setAttribute('aria-label', p.name);
+  d.onclick = () => strip.goTo(i); dots.append(d);
 });
-const heroImgs = [...track.querySelectorAll('img')], dotEls = [...dots.children];
+const slides = [...track.children], dotEls = [...dots.children];
 let metaIdx = -1;
 function setMeta(i) {
   if (i === metaIdx) return; metaIdx = i;
@@ -294,47 +291,35 @@ function setMeta(i) {
   meta.firstElementChild.innerHTML = `<b>${p.name} “${p.nick}”</b><span>${brl(p.price)} · <a data-open="${p.id}">Ver detalhes ›</a></span>`;
 }
 meta.onclick = (e) => { const id = e.target.dataset?.open; if (id) open(PRODUCTS.find((p) => p.id === id)); };
-const hero = new Swiper($('#heroCar'), track, {
-  loop: true,
-  onProgress(pos) {
-    heroImgs.forEach((im, i) => {
-      const d = i - pos, ad = Math.min(Math.abs(d), 1.5);
-      const e = ad * ad * (3 - 2 * Math.min(ad, 1));   // suaviza (smoothstep)
-      im.style.transform = `translate3d(${d * -18}%,0,0) rotate(${-8 + d * 9}deg) scale(${1 - e * 0.14})`;
-      im.style.opacity = 1 - Math.min(e, 1) * 0.6;
+const strip = new FreeStrip(car, slides, {
+  slideWidth: (W) => W < 600 ? W * 0.74 : Math.min(W * 0.42, 560),
+  drift: 0.08,
+  onFrame(pos, items, sw) {
+    car.style.setProperty('--sw', sw + 'px');
+    items.forEach((el) => {
+      const d = el._d, ad = Math.min(Math.abs(d), 2);
+      const s = 1 - Math.min(ad, 1.2) * 0.2;
+      const im = el.firstElementChild.firstElementChild;
+      im.style.transform = `rotate(${(-8 + Math.max(-1, Math.min(1, d)) * 6).toFixed(2)}deg) scale(${s.toFixed(4)})`;
+      im.style.opacity = (1 - Math.min(ad, 1.4) * 0.45).toFixed(3);
+      el.style.zIndex = 10 - Math.round(ad * 3);
     });
-    // legenda: troca no meio do caminho, com fade/slide contínuo acompanhando o gesto
-    const n = ((Math.round(pos) % PRODUCTS.length) + PRODUCTS.length) % PRODUCTS.length;
-    setMeta(n);
-    const f = Math.min(Math.abs(pos - Math.round(pos)) * 2, 1), dir = Math.sign(pos - Math.round(pos));
-    meta.firstElementChild.style.opacity = 1 - f;
-    meta.firstElementChild.style.transform = `translate3d(${-dir * f * 24}px,0,0)`;
+    // legenda e indicadores acompanham continuamente o tênis mais próximo do centro
+    const n = PRODUCTS.length, near = ((Math.round(pos) % n) + n) % n;
+    setMeta(near);
+    const f = Math.min(Math.abs(pos - Math.round(pos)) * 2, 1);
+    meta.firstElementChild.style.opacity = (1 - f * f).toFixed(3);
     dotEls.forEach((el, k) => {
-      const f = Math.max(0, 1 - Math.abs(pos - k));
-      el.style.width = 8 + 18 * f + 'px';
-      el.style.background = f > 0.5 ? '#86868b' : '';
+      const dd = Math.abs(strip.wrap(k - pos)), w = Math.max(0, 1 - dd);
+      el.style.width = (8 + 18 * w).toFixed(1) + 'px';
+      el.style.background = `rgba(29,29,31,${(0.18 + 0.62 * w).toFixed(3)})`;
     });
   },
-  onChange() { restartTimer(); },
-  onGrab() { paused = true; },
-  onRelease() { pauseAuto(); },
 });
-$('#heroCar').addEventListener('click', () => { if (!hero.moved) open(PRODUCTS[hero.index]); });
-// avanço automático com barra de progresso no indicador ativo; pausa quando o usuário interage
-let paused = false, resumeT, tStart = performance.now();
-const AUTO = 5500;
-function pauseAuto() { paused = true; clearTimeout(resumeT); resumeT = setTimeout(() => { paused = false; restartTimer(); }, 6000); }
-function restartTimer() { tStart = performance.now(); }
-(function loop() {
-  const el = dotEls[hero.index]?.firstElementChild;
-  if (!paused && !document.hidden && !$('#sheet').classList.contains('on')) {
-    const f = (performance.now() - tStart) / AUTO;
-    dotEls.forEach((d, k) => d.firstElementChild.style.transform = `scaleX(${k === hero.index ? Math.min(f, 1) : 0})`);
-    if (f >= 1) { hero.next({ soft: true }); restartTimer(); }
-  } else { restartTimer(); dotEls.forEach((d) => d.firstElementChild.style.transform = 'scaleX(0)'); }
-  requestAnimationFrame(loop);
-})();
-setMeta(0);
+car.addEventListener('click', (e) => {
+  if (strip.moved) return;
+  const s = e.target.closest('.hero-slide'); if (s) open(PRODUCTS[+s.dataset.i]);
+});
 
 /* filtros + grid */
 const brands = ['Todos', ...new Set(PRODUCTS.map((p) => p.brand))];
@@ -385,7 +370,7 @@ async function open(p) {
   modelReady = false;
   $('#photos').classList.add('on');
   const sh = $('#sheet'); sh.classList.remove('closing'); sh.style.backgroundColor = ''; $('.panel').style.transform = ''; $('.panel').style.transition = '';
-  sh.classList.add('on'); document.body.style.overflow = 'hidden'; $('.panel').scrollTop = 0;
+  sh.classList.add('on'); document.body.style.overflow = 'hidden'; strip.paused = true; $('.panel').scrollTop = 0;
   if (location.hash !== '#' + p.id) history.replaceState(null, '', '#' + p.id);
 
   // modelo 3D gerado em segundo plano, usado só no AR ("Ver no seu espaço")
@@ -406,7 +391,7 @@ function updateArNote() {
 }
 function close() {
   const sh = $('#sheet'); if (!sh.classList.contains('on') || sh.classList.contains('closing')) return;
-  sh.classList.add('closing'); cur = null; history.replaceState(null, '', location.pathname);
+  sh.classList.add('closing'); cur = null; strip.paused = false; history.replaceState(null, '', location.pathname);
   setTimeout(() => { sh.classList.remove('on', 'closing'); sh.style.backgroundColor = ''; $('.panel').style.transform = ''; $('.panel').style.transition = ''; document.body.style.overflow = ''; }, 380);
 }
 dragToClose($('#grab'), $('.panel'), $('#sheet'), close);
