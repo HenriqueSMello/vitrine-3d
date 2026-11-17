@@ -6,7 +6,6 @@
 <title>Vitrine 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"}}</script>
 <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.0.0/dist/model-viewer.min.js"></script>
 <style>
 :root{
@@ -199,6 +198,14 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
 .info .price{font-size:22px;margin-top:18px}
 .info .desc{color:var(--mute);font-size:15px;line-height:1.5;margin-top:14px}
 .label{font-size:14px;font-weight:600;margin:24px 0 10px}
+.label span{font-weight:400;color:var(--mute)}
+.vars{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px;margin:0 -2px;scrollbar-width:none}
+.vars::-webkit-scrollbar{display:none}
+.vars button{flex:0 0 auto;width:86px;height:62px;border-radius:14px;background:var(--soft);display:grid;place-items:center;padding:6px;
+  scroll-snap-align:start;border:2px solid transparent;transition:border-color .25s,transform .2s}
+.vars button.on{border-color:var(--ink);background:#fff}
+.vars button:active{transform:scale(.95)}
+.vars img{width:100%;height:100%;object-fit:contain}
 .sizes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .sizes button{height:48px;border-radius:12px;border:1px solid var(--line);font-size:15px;transition:.15s}
 .sizes button:hover{border-color:#86868b}.sizes button.on{border:2px solid var(--blue)}
@@ -225,10 +232,27 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
 .to-top{position:absolute;top:max(14px,env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;align-items:center;z-index:3}
 .to-btn{width:42px;height:42px;border-radius:50%;background:rgba(0,0,0,.42);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:grid;place-items:center;color:#fff;font-size:22px}
 .to-status{padding:9px 14px;border-radius:999px;background:rgba(0,0,0,.42);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);font-size:14px;font-weight:500}
-.to-bottom{position:absolute;left:0;right:0;bottom:max(24px,env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:center;gap:44px;z-index:3}
-.to-shot{width:72px;height:72px;border-radius:50%;border:4px solid #fff;background:rgba(255,255,255,.25);transition:transform .15s}
-.to-shot:active{transform:scale(.9)}
-.to-hint{position:absolute;left:50%;bottom:130px;transform:translateX(-50%);width:min(88%,380px);text-align:center;font-size:14px;line-height:1.45;
+.to-stage canvas{pointer-events:none}
+.to-scan{position:absolute;left:8%;right:8%;top:18%;bottom:26%;border-radius:28px;pointer-events:none;
+  background:linear-gradient(180deg,transparent 0 48%,rgba(120,200,255,.55) 50%,transparent 52% 100%);background-size:100% 220%;
+  animation:scan 2.2s ease-in-out infinite;opacity:0;transition:opacity .5s;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35)}
+.tryon.scanning .to-scan{opacity:1}
+@keyframes scan{0%{background-position:0 100%}100%{background-position:0 0}}
+.to-name{position:absolute;left:0;right:0;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 104px);text-align:center;z-index:3;font-size:15px;font-weight:600;
+  text-shadow:0 1px 8px rgba(0,0,0,.5)}
+.to-name span{display:block;font-size:12px;font-weight:500;opacity:.85}
+.to-bottom{position:absolute;left:0;right:0;bottom:max(18px,env(safe-area-inset-bottom));height:92px;z-index:3}
+.to-car{position:absolute;inset:0;display:flex;align-items:center;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;
+  padding:0 calc(50% - 38px);scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.to-car::-webkit-scrollbar{display:none}
+.to-car button{flex:0 0 76px;height:76px;border-radius:50%;background:rgba(255,255,255,.88);scroll-snap-align:center;display:grid;place-items:center;
+  padding:10px;transition:transform .25s cubic-bezier(.22,1,.36,1),opacity .25s;opacity:.75;transform:scale(.78)}
+.to-car button.on{opacity:1;transform:scale(1)}
+.to-car img{width:100%;height:100%;object-fit:contain}
+.to-ring{position:absolute;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;border:4px solid #fff;pointer-events:none;z-index:2;
+  box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+
+.to-hint{position:absolute;left:50%;top:84px;transform:translateX(-50%);width:min(88%,380px);text-align:center;font-size:14px;line-height:1.45;
   background:rgba(0,0,0,.45);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:12px 16px;border-radius:16px;z-index:3;transition:opacity .5s}
 .to-prev{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px}
 .to-prev.on{display:flex}.to-prev img{max-width:100%;max-height:72vh;border-radius:18px}
@@ -308,6 +332,8 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
       <div class="tag" id="pTag"></div>
       <h3 id="pName"></h3>
       <div class="sku" id="pSku"></div>
+      <div class="label" id="pColorLbl">Cor</div>
+      <div class="vars" id="vars"></div>
       <div class="price" id="pPrice"></div>
       <p class="desc" id="pDesc"></p>
       <div class="label">Tamanho (BR)</div>
@@ -326,11 +352,12 @@ model-viewer[ar-status="session-started"],model-viewer[ar-status="object-placed"
   </div>
 </div>
 <div class="tryon" id="tryon">
-  <div class="to-stage"><video playsinline muted></video></div>
+  <div class="to-stage" id="toStage"><video playsinline muted></video><canvas></canvas><div class="to-scan"></div></div>
   <div class="to-top"><button class="to-btn" id="toClose" aria-label="Fechar">×</button><div class="to-status">Abrindo a câmera…</div>
     <button class="to-btn" id="toFlip" aria-label="Trocar câmera"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M9 13a3 3 0 0 0 5.2 2M15 12a3 3 0 0 0-5.2-2"/></svg></button></div>
-  <div class="to-hint" id="toHint">Aponte a câmera para os seus pés, de lado, a cerca de 1 metro, com as canelas aparecendo. Dá para usar a câmera frontal num espelho também.</div>
-  <div class="to-bottom"><button class="to-shot" id="toShot" aria-label="Tirar foto"></button></div>
+  <div class="to-hint" id="toHint">Olhe para baixo e enquadre os seus pés. Arraste para o lado para trocar a cor. Toque no círculo para tirar foto.</div>
+  <div class="to-name" id="toName"></div>
+  <div class="to-bottom"><div class="to-ring"></div><div class="to-car" id="toCar"></div></div>
   <div class="to-prev" id="toPrev"><img alt="Foto do provador"><p>Segure a foto para salvar</p><button class="btn pri" id="toPrevOk">Voltar</button></div>
 </div>
 <div class="toast" id="toast"></div>
@@ -341,18 +368,19 @@ import { Swiper, FreeStrip, dragToClose, haptic } from './swipe.js';
 let tryon = null; const loadTryOn = async () => tryon ??= new (await import('./tryon.js')).TryOn(document.querySelector('#tryon'));
 
 const PRODUCTS = [
-  { id:'aj1', tint:['#cdeedb','#ece7d6','#e3f3ea'], brand:'Jordan', tag:'Edição limitada', name:'Air Jordan 1 Low', nick:'Panda Prank · Dragon', sku:'553558-065', price:1099,
+  { id:'aj1', variants:[{ vid:'aj1', nick:'Panda Prank · Dragon', sku:'553558-065', colors:['#121212','#1f8a4c','#efe9d8'] }, { vid:'aj1_b', nick:'Panda Prank · Jungle', sku:'553558-040', colors:['#3b3d36','#7b8a63','#e8e2d3'] }], tint:['#cdeedb','#ece7d6','#e3f3ea'], brand:'Jordan', tag:'Edição limitada', name:'Air Jordan 1 Low', nick:'Panda Prank · Dragon', sku:'553558-065', price:1099,
     colors:['#121212','#1f8a4c','#efe9d8'], desc:'Cabedal em couro com estampa de dragão, sobreposições em textura de serpente e solado verde. O clássico de 1985 numa leitura de rua.' },
-  { id:'af1w', tint:['#dfe9f7','#eef0f6','#f3f6fb'], brand:'Nike', tag:'Clássico', name:"Nike Air Force 1 '07", nick:'Triple White', sku:'CW2288-111', price:799,
+  { id:'af1w', variants:[{ vid:'af1w', nick:'Triple White', sku:'CW2288-111', colors:['#ffffff','#e9e9ec'] }, { vid:'af1t', nick:'Wheat', sku:'CJ9179-200', colors:['#c08a4a','#e0b77a'] }, { vid:'af1_c', nick:'Black Panda', sku:'DV0788-020', colors:['#151515','#f2f2f2','#b8bec7'] }], tint:['#dfe9f7','#eef0f6','#f3f6fb'], brand:'Nike', tag:'Clássico', name:"Nike Air Force 1 '07", nick:'Triple White', sku:'CW2288-111', price:799,
     colors:['#ffffff','#e9e9ec'], desc:'Couro branco, entressola com Air e o perfil que virou ícone. Combina com tudo, de verdade.' },
-  { id:'dunk', tint:['#f7d3c8','#d4dcf2','#efe2d6'], brand:'Nike', tag:'Novidade', name:'Nike SB Dunk Low', nick:'Baroque Brown', sku:'HQ1625-200', price:999,
+  { id:'dunk', variants:[{ vid:'dunk', nick:'Baroque Brown', sku:'HQ1625-200', colors:['#6b4a33','#2d3f73','#f07a6a'] }, { vid:'dunk_b', nick:'White Royal', sku:'HF5441-121', colors:['#f7f7f5','#2a4b9b','#c99a5b'] }, { vid:'dunk_c', nick:'Ice Blue', sku:'HF5441-105', colors:['#f5f7fa','#bcd6ee','#b9bcc2'] }], tint:['#f7d3c8','#d4dcf2','#efe2d6'], brand:'Nike', tag:'Novidade', name:'Nike SB Dunk Low', nick:'Baroque Brown', sku:'HQ1625-200', price:999,
     colors:['#6b4a33','#2d3f73','#f07a6a'], desc:'Camurça marrom e azul-marinho com Swoosh salmão, língua acolchoada com Zoom e solado vulcanizado. Feito para o skate e para a rua.' },
-  { id:'nb550', tint:['#d6e0f6','#eceef2','#e4e9f5'], brand:'New Balance', tag:'Mais vendido', name:'New Balance 550', nick:'White Navy', sku:'BB550STG', price:899,
+  { id:'nb550', variants:[{ vid:'nb550', nick:'White Navy', sku:'BB550STG', colors:['#f4f4f2','#1e2f5a','#cfcfcf'] }, { vid:'nb550_b', nick:'Grey Gum', sku:'BB550ESC', colors:['#f3f3f1','#8a8c90','#a9733f'] }, { vid:'nb550_d', nick:'Cream Green', sku:'BB550CPE', colors:['#efe8d8','#1f4d3a','#cfcfcf'] }], tint:['#d6e0f6','#eceef2','#e4e9f5'], brand:'New Balance', tag:'Mais vendido', name:'New Balance 550', nick:'White Navy', sku:'BB550STG', price:899,
     colors:['#f4f4f2','#1e2f5a','#cfcfcf'], desc:'O tênis de basquete dos anos 80 que voltou para ficar: couro branco, detalhes em azul-marinho e camurça cinza.' },
-  { id:'nb1906', tint:['#d4d6dd','#c9ced9','#e6e7eb'], brand:'New Balance', tag:'Performance', name:'New Balance 1906R', nick:'Cordura Black', sku:'U19061OP', price:1199,
+  { id:'nb1906', variants:[{ vid:'nb1906', nick:'Cordura Black', sku:'U19061OP', colors:['#0e0e0e','#3a3a3a'] }, { vid:'nb1906_c', nick:'Steel Grey', sku:'U19064W2', colors:['#7d8086','#151515','#e9e9ea'] }, { vid:'nb1906_d', nick:'Silver Sky', sku:'U19065IC', colors:['#d9dcdf','#8fb3d9','#f4f4f4'] }], tint:['#d4d6dd','#c9ced9','#e6e7eb'], brand:'New Balance', tag:'Performance', name:'New Balance 1906R', nick:'Cordura Black', sku:'U19061OP', price:1199,
     colors:['#0e0e0e','#3a3a3a'], desc:'Tecnologia de corrida dos anos 2000 com cabedal em Cordura resistente e amortecimento N-ergy. Tudo em preto.' },
 ];
-const img = (p, k) => `img/${p.id}_${k}.webp`;
+const img = (p, k) => `img/${p.vid ?? p.id}_${k}.webp`;
+const variantOf = (p, i = 0) => ({ ...p, ...p.variants[i], vi: i });   // produto + cor escolhida
 const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const $ = (s) => document.querySelector(s);
 
@@ -419,8 +447,8 @@ function render() {
   $('#grid').innerHTML = '';
   PRODUCTS.filter((p) => filter === 'Todos' || p.brand === filter).forEach((p) => {
     const el = document.createElement('article'); el.className = 'card';
-    el.innerHTML = `<div class="swatch">${p.colors.map((c) => `<i style="background:${c}"></i>`).join('')}</div>
-      <div class="tag">${p.tag}</div><h3>${p.name}</h3><p>${p.nick}</p>
+    el.innerHTML = `<div class="swatch">${p.variants.map((v) => `<i style="background:${v.colors[0] === '#ffffff' || v.colors[0].startsWith('#f') ? v.colors[1] : v.colors[0]}"></i>`).join('')}</div>
+      <div class="tag">${p.tag}</div><h3>${p.name}</h3><p>${p.variants.length} cores</p>
       <div class="shot"><img src="${img(p, 'lat')}" alt="${p.name}" loading="lazy"></div>
       <div class="row"><span class="price">${brl(p.price)}</span>
       <span class="badge3d"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z"/><path d="m3 7 9 5 9-5M12 12v10"/></svg>Ver no seu espaço</span></div>`;
@@ -476,10 +504,9 @@ const bag = [];
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('on'), 2200); }
 let modelReady = false;
 
-async function open(p) {
+async function open(p, vi = 0) {
   cur = p; size = null;
-  $('#pTag').textContent = p.tag; $('#pName').textContent = `${p.name} “${p.nick}”`;
-  $('#pSku').textContent = `${p.brand} · ${p.sku}`; $('#pPrice').textContent = brl(p.price) + '  ·  em até 10x sem juros';
+  $('#pTag').textContent = p.tag; $('#pPrice').textContent = brl(p.price) + '  ·  em até 10x sem juros';
   $('#pDesc').textContent = p.desc;
   $('#sizes').innerHTML = '';
   [36,37,38,39,40,41,42,43].forEach((s) => {
@@ -487,25 +514,36 @@ async function open(p) {
     b.onclick = () => { size = s; haptic(); document.querySelectorAll('#sizes button').forEach((x) => x.classList.toggle('on', x === b)); };
     $('#sizes').append(b);
   });
-  const shots = ['lat', 'med', '04', '03'];
-  $('#photos').innerHTML = `<div class="ph-car" id="phCar"><div class="ph-track" id="phTrack">${shots.map((k) => `<div><img src="${img(p, k)}" alt="${p.name}"></div>`).join('')}</div></div>
-    <div class="ph-thumbs">${shots.map((k, i) => `<button class="${i ? '' : 'on'}" data-i="${i}"><img src="${img(p, k)}" alt=""></button>`).join('')}</div>`;
-  const thumbs = [...document.querySelectorAll('.ph-thumbs button')];
-  const ph = new Swiper($('#phCar'), $('#phTrack'), { onChange: (i) => thumbs.forEach((x, k) => x.classList.toggle('on', k === i)) });
-  thumbs.forEach((b) => b.onclick = () => ph.goTo(+b.dataset.i));
-  modelReady = false;
-  $('#photos').classList.add('on');
+  $('#vars').innerHTML = p.variants.map((v, i) => `<button data-i="${i}" aria-label="${v.nick}"><img src="img/${v.vid}_lat.webp" alt=""></button>`).join('');
+  $('#vars').querySelectorAll('button').forEach((b) => b.onclick = () => { haptic(); showVariant(+b.dataset.i); });
   const sh = $('#sheet'); sh.classList.remove('closing'); sh.style.backgroundColor = ''; $('.panel').style.transform = ''; $('.panel').style.transition = '';
   sh.classList.add('on'); document.body.style.overflow = 'hidden'; strip.paused = true; $('.panel').scrollTop = 0;
   if (location.hash !== '#' + p.id) history.replaceState(null, '', '#' + p.id);
-
+  showVariant(vi);
+}
+let curV = null;
+async function showVariant(i) {
+  const p = cur, v = variantOf(p, i); curV = v;
+  $('#pName').textContent = `${p.name} “${v.nick}”`;
+  $('#pSku').textContent = `${p.brand} · ${v.sku}`;
+  $('#pColorLbl').innerHTML = `Cor <span>· ${v.nick} (${p.variants.length} opções)</span>`;
+  $('#vars').querySelectorAll('button').forEach((b, k) => b.classList.toggle('on', k === i));
+  const shots = ['lat', 'med', '04', '03'];
+  $('#photos').innerHTML = `<div class="ph-car" id="phCar"><div class="ph-track" id="phTrack">${shots.map((k) => `<div><img src="${img(v, k)}" alt="${p.name}"></div>`).join('')}</div></div>
+    <div class="ph-thumbs">${shots.map((k, j) => `<button class="${j ? '' : 'on'}" data-i="${j}"><img src="${img(v, k)}" alt=""></button>`).join('')}</div>`;
+  $('#photos').animate([{ opacity: .3 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' });
+  const thumbs = [...document.querySelectorAll('.ph-thumbs button')];
+  const ph = new Swiper($('#phCar'), $('#phTrack'), { onChange: (k) => thumbs.forEach((x, j) => x.classList.toggle('on', j === k)) });
+  thumbs.forEach((b) => b.onclick = () => ph.goTo(+b.dataset.i));
+  modelReady = false;
+  $('#photos').classList.add('on');
   // modelo 3D gerado em segundo plano, usado só no AR ("Ver no seu espaço")
   mv.removeAttribute('src');
-  await new Promise((r) => setTimeout(r, 350)); // deixa a ficha abrir suave antes de gerar
-  if (cur !== p) return;
-  const url = await generateModel(img(p, 'lat'), img(p, 'med'));
-  if (cur !== p) return;
-  mv.addEventListener('load', () => { if (cur !== p) return; modelReady = true; updateArNote(); }, { once: true });
+  await new Promise((r) => setTimeout(r, 350));
+  if (curV !== v) return;
+  const url = await generateModel(img(v, 'lat'), img(v, 'med'));
+  if (curV !== v) return;
+  mv.addEventListener('load', () => { if (curV !== v) return; modelReady = true; updateArNote(); }, { once: true });
   mv.src = url;
   mv.cameraOrbit = '-28deg 74deg auto'; mv.jumpCameraToGoal?.();
 }
@@ -530,16 +568,63 @@ $('#arBtn').onclick = async () => {
   else toast('Abra no celular para ver o tênis no seu espaço 📱');
 };
 /* provador no pé */
-let modelUrl = null;
+let toIdx = 0;
+function buildToCar() {
+  $('#toCar').innerHTML = cur.variants.map((v, i) => `<button data-i="${i}" aria-label="${v.nick}"><img src="img/${v.vid}_lat.webp" alt=""></button>`).join('');
+  $('#toCar').querySelectorAll('button').forEach((b) => b.onclick = () => {
+    const i = +b.dataset.i;
+    if (i === toIdx) shoot(); else scrollToVar(i);
+  });
+}
+function scrollToVar(i, smooth = true) {
+  const c = $('#toCar'), b = c.children[i]; if (!b) return;
+  c.scrollTo({ left: b.offsetLeft - (c.clientWidth - b.offsetWidth) / 2, behavior: smooth ? 'smooth' : 'instant' });
+}
+function setToVar(i) {
+  if (i === toIdx) return;
+  toIdx = i; const v = variantOf(cur, i);
+  $('#toCar').querySelectorAll('button').forEach((b, k) => b.classList.toggle('on', k === i));
+  $('#toName').innerHTML = `${cur.name}<span>${v.nick}</span>`;
+  haptic();
+  tryon?.setVariant(v, img);
+}
+// a cor ativa é a que está no centro do carrossel (dentro do anel)
+$('#toCar').addEventListener('scroll', () => {
+  const c = $('#toCar'), mid = c.scrollLeft + c.clientWidth / 2;
+  let best = 0, bd = 1e9;
+  [...c.children].forEach((b, i) => { const d = Math.abs(b.offsetLeft + b.offsetWidth / 2 - mid); if (d < bd) { bd = d; best = i; } });
+  setToVar(best);
+}, { passive: true });
+// arrastar na câmera para o lado também troca a cor; um toque inverte o tênis (vista lateral)
+(() => {
+  let s = null; const st = $('#toStage'); st.style.touchAction = 'none';
+  st.addEventListener('pointerdown', (e) => { s = { x: e.clientX, y: e.clientY }; });
+  st.addEventListener('pointerup', (e) => {
+    if (!s) return; const dx = e.clientX - s.x, dy = e.clientY - s.y; s = null;
+    const n = cur.variants.length;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) scrollToVar(Math.max(0, Math.min(n - 1, toIdx + (dx < 0 ? 1 : -1))));
+    else if (Math.hypot(dx, dy) < 8) tryon?.toggleFlip();
+  });
+})();
+async function shoot() {
+  if (!tryon) return; haptic();
+  const blob = await tryon.snapshot();
+  const file = new File([blob], 'vitrine-3d.jpg', { type: 'image/jpeg' });
+  if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: 'Vitrine 3D' }); return; } catch {} }
+  const pv = $('#toPrev'); pv.querySelector('img').src = URL.createObjectURL(blob); pv.classList.add('on');
+}
 $('#footBtn').onclick = async () => {
   if (!navigator.mediaDevices?.getUserMedia) { toast('Este navegador não libera a câmera'); return; }
-  const p = cur, ov = $('#tryon');
-  ov.classList.add('on'); $('#toHint').style.opacity = 1;
+  const ov = $('#tryon'), start = curV?.vi ?? 0;
+  ov.classList.add('on', 'scanning'); $('#toHint').style.opacity = 1;
+  buildToCar(); toIdx = -1;
+  requestAnimationFrame(() => scrollToVar(start, false));
+  setToVar(start);
   try {
-    const [t, url] = await Promise.all([loadTryOn(), generateModel(img(p, 'lat'), img(p, 'med'))]);
-    await t.setModel(url);
+    const t = await loadTryOn();
+    await t.setVariant(variantOf(cur, toIdx), img);
     await t.start();
-    setTimeout(() => $('#toHint').style.opacity = 0, 6000);
+    setTimeout(() => $('#toHint').style.opacity = 0, 5000);
   } catch (e) {
     console.error(e);
     ov.classList.remove('on'); tryon?.stop();
@@ -547,15 +632,10 @@ $('#footBtn').onclick = async () => {
   }
 };
 $('#toClose').onclick = () => { tryon?.stop(); $('#tryon').classList.remove('on'); };
-$('#toFlip').onclick = () => tryon?.flip().catch(() => toast('Não foi possível trocar a câmera'));
-$('#toShot').onclick = async () => {
-  if (!tryon) return; haptic();
-  const blob = await tryon.snapshot();
-  const file = new File([blob], 'vitrine-3d.jpg', { type: 'image/jpeg' });
-  if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: 'Vitrine 3D' }); return; } catch {} }
-  const pv = $('#toPrev'); pv.querySelector('img').src = URL.createObjectURL(blob); pv.classList.add('on');
-};
+$('#toFlip').onclick = () => tryon?.switchCamera().catch(() => toast('Não foi possível trocar a câmera'));
 $('#toPrevOk').onclick = () => $('#toPrev').classList.remove('on');
+new MutationObserver(() => $('#tryon').classList.toggle('scanning', !/calçad|dois/.test($('.to-status').textContent)))
+  .observe($('.to-status'), { childList: true, characterData: true, subtree: true });
 
 $('#addBtn').onclick = () => {
   if (!size) { toast('Escolha um tamanho'); return; }

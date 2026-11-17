@@ -1,190 +1,213 @@
-// Vitrine 3D — Provador no pé (protótipo)
-// Câmera + detecção de pose (MediaPipe Pose Landmarker, roda no navegador) para encontrar
-// calcanhar, ponta do pé e tornozelo, e three.js para "calçar" o modelo 3D do tênis em cada pé.
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { PoseLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/vision_bundle.mjs';
+// Vitrine 3D — Provador no pé (v2)
+// Escaneia os pés pela câmera com um detector YOLOv8n (classes "Footwear" / "Human foot" do Open Images),
+// rodando no próprio celular via onnxruntime-web, e "calça" o tênis escolhido sobre cada pé detectado.
+// Funciona olhando de cima para os próprios pés (vista superior) e também de lado.
+import * as ort from 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.wasm.min.mjs';
 
-const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/wasm';
-const MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/';
+ort.env.wasm.numThreads = 1;
 
-// índices BlazePose
-const L = { knee: 25, ankle: 27, heel: 29, toe: 31 };
-const R = { knee: 26, ankle: 28, heel: 30, toe: 32 };
+const MODEL = new URL('./models/foot.onnx', import.meta.url).href;
+const S = 320;                                  // entrada da rede
+const CLASSES = [56, 203, 265, 432];            // Boot, Footwear, Human foot, Sandal
+const CONF = 0.3;
 
-// pontos do modelo (metros, eixo x: bico em -x, calcanhar em +x; y para cima)
-const M_HEEL = new THREE.Vector3(0.135, 0.03, 0);
-const M_TOE = new THREE.Vector3(-0.08, 0.03, 0);   // "foot_index" fica na base dos dedos
+let sessionP = null;
+// o modelo (14 MB) é servido em partes de 3,5 MB e remontado aqui
+const PARTS = 5;
+const getSession = () => sessionP ??= (async () => {
+  const bufs = await Promise.all(Array.from({ length: PARTS }, (_, i) => fetch(`${MODEL}.part${i}`).then((r) => { if (!r.ok) throw new Error('modelo'); return r.arrayBuffer(); })));
+  const all = new Uint8Array(bufs.reduce((n, b) => n + b.byteLength, 0)); let o = 0;
+  for (const b of bufs) { all.set(new Uint8Array(b), o); o += b.byteLength; }
+  return ort.InferenceSession.create(all, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+})();
 
-let landmarkerP = null;
-function getLandmarker() {
-  landmarkerP ??= (async () => {
-    const vision = await FilesetResolver.forVisionTasks(WASM);
-    const opts = (delegate) => ({ baseOptions: { modelAssetPath: MODEL, delegate }, runningMode: 'VIDEO', numPoses: 1,
-      minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5 });
-    try { return await PoseLandmarker.createFromOptions(vision, opts('GPU')); }
-    catch { return await PoseLandmarker.createFromOptions(vision, opts('CPU')); }
-  })();
-  return landmarkerP;
+const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+
+// sombra suave (gradiente radial esticado — funciona também no Safari, que não tem ctx.filter)
+function shadow(c, x, y, rx, ry, a) {
+  c.save(); c.translate(x, y); c.scale(1, ry / rx);
+  const g = c.createRadialGradient(0, 0, 0, 0, 0, rx);
+  g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = g; c.fillRect(-rx, -rx, rx * 2, rx * 2); c.restore();
+}
+
+function iou(a, b) {
+  const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y), x2 = Math.min(a.x + a.w, b.x + b.w), y2 = Math.min(a.y + a.h, b.y + b.h);
+  const i = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  return i / (a.w * a.h + b.w * b.h - i);
 }
 
 export class TryOn {
   constructor(root) {
     this.root = root;
     this.video = root.querySelector('video');
-    this.stage = root.querySelector('.to-stage');
+    this.canvas = root.querySelector('.to-stage canvas');
+    this.ctx = this.canvas.getContext('2d');
     this.status = root.querySelector('.to-status');
-    this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.stage.append(this.renderer.domElement);
-    this.scene = new THREE.Scene();
-    this.cam = new THREE.OrthographicCamera(0, 1, 0, -1, -5000, 5000);
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f99, 2.2));
-    const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(300, 800, 900); this.scene.add(dl);
-    this.feet = [this.makeFoot(), this.makeFoot()];
     this.facing = 'environment';
+    this.slots = [this.slot(), this.slot()];
+    this.pre = document.createElement('canvas'); this.pre.width = this.pre.height = S;
+    this.prex = this.pre.getContext('2d', { willReadFrequently: true });
+    this.input = new Float32Array(3 * S * S);
+    this.flip = false;
     addEventListener('resize', () => this.resize());
   }
-  makeFoot() {
-    const pivot = new THREE.Group(); pivot.visible = false;
-    const holder = new THREE.Group(); pivot.add(holder);
-    // sombra de contato
-    const sh = new THREE.Mesh(new THREE.CircleGeometry(0.5, 32),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false }));
-    sh.rotation.x = -Math.PI / 2; sh.scale.set(0.2, 0.065, 1); sh.position.set(0.02, 0.002, 0);
-    holder.add(sh);
-    this.scene.add(pivot);
-    return { pivot, holder, shoe: null, ready: false, pos: null, quat: new THREE.Quaternion(), s: 0, alpha: 0 };
-  }
-  async setModel(url) {
-    const gltf = await new GLTFLoader().loadAsync(url);
-    this.feet.forEach((f) => {
-      if (f.shoe) f.holder.remove(f.shoe);
-      const s = gltf.scene.clone(true);
-      s.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.side = THREE.DoubleSide; o.material.transparent = true; } });
-      f.shoe = s; f.holder.add(s);
-    });
+  slot() { return { box: null, target: null, seen: 0, alpha: 0 }; }
+
+  /** imagens do tênis: vista de cima (pé esquerdo/direito) e lateral */
+  async setVariant(v, imgFn) {
+    const tok = (this.tok = (this.tok || 0) + 1);
+    const [tL, tR, lat] = await Promise.all([loadImg(imgFn(v, 'topL')), loadImg(imgFn(v, 'topR')), loadImg(imgFn(v, 'lat'))]);
+    if (tok !== this.tok) return;
+    this.prevImgs = this.imgs; this.swapT = performance.now();
+    this.imgs = { tL, tR, lat };
   }
   async start() {
     this.running = true;
     this.say('Abrindo a câmera…');
     await this.openCamera();
-    this.say('Carregando o provador…');
-    this.lm = await getLandmarker();
+    this.say('Carregando o scanner…');
+    this.session = await getSession();
     this.say('Aponte para os seus pés');
-    this.resize();
-    this.lastT = -1;
-    const loop = () => { if (!this.running) return; this.frame(); this.raf = requestAnimationFrame(loop); };
-    loop();
+    this.loop();
+    this.detectLoop();
   }
   async openCamera() {
     this.stream?.getTracks().forEach((t) => t.stop());
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: false, video: { facingMode: { ideal: this.facing }, width: { ideal: 1280 }, height: { ideal: 720 } },
-    });
-    this.video.srcObject = this.stream;
-    this.video.playsInline = true; this.video.muted = true;
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: false,
+      video: { facingMode: { ideal: this.facing }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+    this.video.srcObject = this.stream; this.video.muted = true; this.video.playsInline = true;
     await this.video.play();
     await new Promise((r) => this.video.readyState >= 2 ? r() : this.video.addEventListener('loadeddata', r, { once: true }));
     this.root.classList.toggle('mirror', this.facing === 'user');
     this.resize();
   }
-  async flip() { this.facing = this.facing === 'user' ? 'environment' : 'user'; await this.openCamera(); }
+  async switchCamera() { this.facing = this.facing === 'user' ? 'environment' : 'user'; await this.openCamera(); }
   stop() {
     this.running = false; cancelAnimationFrame(this.raf);
     this.stream?.getTracks().forEach((t) => t.stop()); this.stream = null;
-    this.feet.forEach((f) => { f.pivot.visible = false; f.pos = null; f.alpha = 0; });
+    this.slots = [this.slot(), this.slot()];
   }
-  say(t) { this.status.textContent = t; }
+  say(t) { if (this.status.textContent !== t) this.status.textContent = t; }
   resize() {
-    const W = this.stage.clientWidth, H = this.stage.clientHeight;
-    this.W = W; this.H = H;
-    this.renderer.setSize(W, H);
-    Object.assign(this.cam, { left: 0, right: W, top: 0, bottom: -H }); this.cam.updateProjectionMatrix();
+    const r = this.canvas.parentElement.getBoundingClientRect(), dpr = Math.min(devicePixelRatio, 2);
+    this.W = r.width; this.H = r.height; this.dpr = dpr;
+    this.canvas.width = r.width * dpr; this.canvas.height = r.height * dpr;
     const vw = this.video.videoWidth || 1280, vh = this.video.videoHeight || 720;
-    const k = Math.max(W / vw, H / vh);                // mesmo enquadramento do object-fit: cover
-    this.map = { k, ox: (W - vw * k) / 2, oy: (H - vh * k) / 2, vw, vh };
+    const k = Math.max(this.W / vw, this.H / vh);
+    this.map = { k, ox: (this.W - vw * k) / 2, oy: (this.H - vh * k) / 2, vw, vh };
   }
-  px(p) { const m = this.map; return new THREE.Vector2(p.x * m.vw * m.k + m.ox, p.y * m.vh * m.k + m.oy); }
-  w3(p) { return new THREE.Vector3(p.x, -p.y, -p.z); }   // mundo MediaPipe → three (y p/ cima, z p/ câmera)
 
-  frame() {
-    const v = this.video;
-    if (v.readyState >= 2 && v.currentTime !== this.lastT) {
-      this.lastT = v.currentTime;
-      if (this.map.vw !== v.videoWidth) this.resize();
-      const res = this.lm.detectForVideo(v, performance.now());
-      const lm = res.landmarks?.[0], wl = res.worldLandmarks?.[0];
-      let seen = 0;
-      [L, R].forEach((idx, i) => {
-        const f = this.feet[i];
-        const vis = lm && Math.min(lm[idx.heel].visibility ?? 1, lm[idx.toe].visibility ?? 1, lm[idx.ankle].visibility ?? 1);
-        if (!lm || vis < 0.45) { f.target = null; return; }
-        seen++;
-        const other = i === 0 ? R : L;
-        f.target = this.solve(lm, wl, idx, other);
-      });
-      this.say(seen ? (seen === 2 ? 'Tênis calçados ✓' : 'Mostre os dois pés') : 'Aponte para os seus pés, de lado, a ~1 m');
-    }
-    // suavização (posição, escala, rotação) e fade in/out
-    this.feet.forEach((f) => {
-      const t = f.target;
-      f.alpha += ((t ? 1 : 0) - f.alpha) * 0.18;
-      if (t) {
-        if (!f.pos) { f.pos = t.pos.clone(); f.s = t.s; f.quat.copy(t.quat); f.mirror = t.mirror; }
-        f.pos.lerp(t.pos, 0.5); f.s += (t.s - f.s) * 0.4; f.quat.slerp(t.quat, 0.4); f.mirror = t.mirror;
+  // ---------- detecção (assíncrona, no ritmo que o aparelho aguentar) ----------
+  async detectLoop() {
+    while (this.running) {
+      const v = this.video;
+      if (v.readyState >= 2 && v.videoWidth) {
+        if (this.map.vw !== v.videoWidth) this.resize();
+        try { this.update(await this.detect(v)); } catch (e) { console.warn(e); }
       }
-      f.pivot.visible = f.alpha > 0.02 && !!f.pos && !!f.shoe;
-      if (!f.pivot.visible) return;
-      f.pivot.position.copy(f.pos);
-      f.pivot.quaternion.copy(f.quat);
-      f.pivot.scale.set(f.s, f.s, f.s * (f.mirror ? -1 : 1));
-      f.holder.traverse((o) => { if (o.material && o.material.opacity !== undefined && o.material !== undefined) o.material.opacity = o.isMesh && o.geometry.type === 'CircleGeometry' ? 0.22 * f.alpha : f.alpha; });
-    });
-    this.renderer.render(this.scene, this.cam);
-  }
-
-  // calcula pose do tênis para um pé
-  solve(lm, wl, idx, other) {
-    const H2 = this.px(lm[idx.heel]), T2 = this.px(lm[idx.toe]), A2 = this.px(lm[idx.ankle]);
-    // orientação 3D a partir das coordenadas de mundo (metros)
-    const h = this.w3(wl[idx.heel]), t = this.w3(wl[idx.toe]), a = this.w3(wl[idx.ankle]);
-    const fwd = t.clone().sub(h).normalize();
-    const up0 = a.clone().sub(h);
-    const up = up0.sub(fwd.clone().multiplyScalar(up0.dot(fwd))).normalize();
-    const xm = fwd.clone().negate();                 // modelo: bico em −x
-    const zm = new THREE.Vector3().crossVectors(xm, up);
-    const rot = new THREE.Matrix4().makeBasis(xm, up, zm);
-    const quat = new THREE.Quaternion().setFromRotationMatrix(rot);
-    // lado de fora do pé: o lado lateral (foto externa) deve ficar para fora
-    const outward = h.clone().sub(this.w3(wl[other.heel])); outward.y = 0;
-    const mirror = zm.dot(outward) < 0;
-    // escala: px por metro, pela projeção do vetor calcanhar→dedos do próprio modelo
-    const vModel = M_TOE.clone().sub(M_HEEL).applyQuaternion(quat);
-    const projLen = Math.hypot(vModel.x, vModel.y);
-    const scr = T2.clone().sub(H2).length();
-    let s;
-    if (projLen > 0.25 * vModel.length()) s = scr / projLen;
-    else {   // pé apontado para a câmera: usa a canela como régua
-      const K2 = this.px(lm[idx.knee]), shin = this.w3(wl[idx.knee]).distanceTo(a);
-      s = K2.distanceTo(A2) / Math.max(shin, 0.2);
+      await new Promise((r) => setTimeout(r, 0));
     }
-    // posiciona: o calcanhar do modelo vai sobre o calcanhar detectado
-    const heelOff = M_HEEL.clone().multiply(new THREE.Vector3(1, 1, mirror ? -1 : 1)).applyQuaternion(quat).multiplyScalar(s);
-    const pos = new THREE.Vector3(H2.x - heelOff.x, -H2.y - heelOff.y, 0);
-    return { pos, quat, s, mirror };
+  }
+  async detect(v) {
+    const vw = v.videoWidth, vh = v.videoHeight, sc = S / Math.max(vw, vh);
+    const dw = vw * sc, dh = vh * sc, px = (S - dw) / 2, py = (S - dh) / 2;
+    const c = this.prex;
+    c.fillStyle = '#727272'; c.fillRect(0, 0, S, S);
+    c.drawImage(v, px, py, dw, dh);
+    const d = c.getImageData(0, 0, S, S).data, inp = this.input, N = S * S;
+    for (let i = 0, j = 0; i < N; i++, j += 4) { inp[i] = d[j] / 255; inp[i + N] = d[j + 1] / 255; inp[i + 2 * N] = d[j + 2] / 255; }
+    const out = await this.session.run({ [this.session.inputNames[0]]: new ort.Tensor('float32', inp, [1, 3, S, S]) });
+    const o = out[this.session.outputNames[0]], A = o.dims[2], data = o.data;   // [1, 4+601, A]
+    const dets = [];
+    for (let a = 0; a < A; a++) {
+      let best = 0;
+      for (const k of CLASSES) { const s = data[(4 + k) * A + a]; if (s > best) best = s; }
+      if (best < CONF) continue;
+      const cx = data[a], cy = data[A + a], w = data[2 * A + a], h = data[3 * A + a];
+      // de volta para coordenadas do vídeo (0..1)
+      dets.push({ s: best, x: (cx - w / 2 - px) / dw, y: (cy - h / 2 - py) / dh, w: w / dw, h: h / dh });
+    }
+    dets.sort((a, b) => b.s - a.s);
+    const keep = [];
+    for (const d2 of dets) { if (keep.every((k) => iou(k, d2) < 0.4)) keep.push(d2); if (keep.length === 2) break; }
+    return keep;
+  }
+  update(dets) {
+    const now = performance.now();
+    // ordena por x para manter cada pé no seu "slot" (esquerdo / direito na tela)
+    dets.sort((a, b) => (a.x + a.w / 2) - (b.x + b.w / 2));
+    if (dets.length === 1) {
+      // um só pé: vai para o slot mais próximo do último visto
+      const d = dets[0], cx = d.x + d.w / 2;
+      const dist = this.slots.map((s) => s.box ? Math.abs(s.box.x + s.box.w / 2 - cx) : 9);
+      const i = dist[0] <= dist[1] ? 0 : 1;
+      this.slots[i].target = d; this.slots[i].seen = now;
+    } else dets.forEach((d, i) => { this.slots[i].target = d; this.slots[i].seen = now; });
+    const n = this.slots.filter((s) => now - s.seen < 400).length;
+    this.say(n === 2 ? 'Tênis calçados ✓' : n === 1 ? 'Mostre os dois pés' : 'Aponte para os seus pés');
   }
 
-  // foto: vídeo + tênis num único JPEG
+  // ---------- desenho (60 fps, interpolando entre as detecções) ----------
+  loop() {
+    if (!this.running) return;
+    this.draw();
+    this.raf = requestAnimationFrame(() => this.loop());
+  }
+  toScreen(b) {
+    const m = this.map;
+    return { x: b.x * m.vw * m.k + m.ox, y: b.y * m.vh * m.k + m.oy, w: b.w * m.vw * m.k, h: b.h * m.vh * m.k };
+  }
+  draw() {
+    const c = this.ctx, now = performance.now();
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    c.clearRect(0, 0, this.W, this.H);
+    if (!this.imgs) return;
+    const fade = this.prevImgs ? Math.min((now - this.swapT) / 280, 1) : 1;
+    this.slots.forEach((s, i) => {
+      const visible = s.target && now - s.seen < 400;
+      s.alpha += ((visible ? 1 : 0) - s.alpha) * 0.2;
+      if (!s.target) return;
+      const t = this.toScreen(s.target);
+      if (!s.box) s.box = { ...t };
+      for (const k of ['x', 'y', 'w', 'h']) s.box[k] += (t[k] - s.box[k]) * 0.35;
+      if (s.alpha < 0.02) return;
+      if (fade < 1 && this.prevImgs) this.drawShoe(c, s.box, i, this.prevImgs, s.alpha * (1 - fade));
+      this.drawShoe(c, s.box, i, this.imgs, s.alpha * fade);
+    });
+  }
+  drawShoe(c, b, i, imgs, alpha) {
+    const vertical = b.h > b.w * 0.85;      // vista de cima: pé "em pé" na tela
+    c.save(); c.globalAlpha = alpha;
+    if (vertical) {
+      const im = i === 0 ? imgs.tL : imgs.tR;
+      const h = b.h * 1.12, w = h * im.width / im.height;
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      // sombra
+      shadow(c, cx, cy + h * 0.04, w * 0.62, h * 0.56, 0.32);
+      c.drawImage(im, cx - w / 2, cy - h / 2, w, h);
+    } else {
+      const im = imgs.lat;
+      const w = b.w * 1.12, h = w * im.height / im.width;
+      const cx = b.x + b.w / 2, by = b.y + b.h;
+      shadow(c, cx, by - h * 0.02, w * 0.56, h * 0.13, 0.34);
+      c.translate(cx, by);
+      if (this.flip) c.scale(-1, 1);
+      c.drawImage(im, -w / 2, -h, w, h);
+    }
+    c.restore();
+  }
+  toggleFlip() { this.flip = !this.flip; }
+
   async snapshot() {
-    const W = this.W, H = this.H, dpr = Math.min(devicePixelRatio, 2);
-    const c = document.createElement('canvas'); c.width = W * dpr; c.height = H * dpr;
-    const x = c.getContext('2d'); x.scale(dpr, dpr);
+    const W = this.W, H = this.H, dpr = this.dpr;
+    const cv = document.createElement('canvas'); cv.width = W * dpr; cv.height = H * dpr;
+    const x = cv.getContext('2d'); x.scale(dpr, dpr);
     if (this.facing === 'user') { x.translate(W, 0); x.scale(-1, 1); }
     const m = this.map;
     x.drawImage(this.video, m.ox, m.oy, m.vw * m.k, m.vh * m.k);
-    x.drawImage(this.renderer.domElement, 0, 0, W, H);
-    return new Promise((r) => c.toBlob(r, 'image/jpeg', 0.92));
+    x.drawImage(this.canvas, 0, 0, W, H);
+    return new Promise((r) => cv.toBlob(r, 'image/jpeg', 0.92));
   }
 }
