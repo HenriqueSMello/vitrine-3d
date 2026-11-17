@@ -68,6 +68,7 @@ export class Swiper {
 
   down(e) {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if (this.opts.enabled && !this.opts.enabled()) return;
     cancelAnimationFrame(this.raf);
     this.vel = 0;
     this.start = { x: e.clientX, y: e.clientY, pos: this.pos };
