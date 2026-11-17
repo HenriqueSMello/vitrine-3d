@@ -117,10 +117,17 @@ model-viewer{width:100%;height:100%;--poster-color:transparent;--progress-bar-co
 .gen-box h4{font-size:17px}.gen-box ol{list-style:none;margin-top:12px;font-size:14px;color:var(--mute)}
 .gen-box li{padding:3px 0;transition:.3s}.gen-box li.done{color:var(--ink)}.gen-box li.done::before{content:"✓ ";color:#1a9d4b}
 .gen-box li.cur{color:var(--blue);font-weight:600}
-.photos{position:absolute;inset:0;display:none;grid-template-columns:1fr 1fr;gap:12px;padding:70px 20px 20px;overflow:auto}
-.photos.on{display:grid}
-.photos div{background:#fff;border-radius:18px;display:grid;place-items:center;padding:16px;min-height:200px}
-.photos img{max-height:240px;filter:drop-shadow(0 10px 14px rgba(0,0,0,.12))}
+.photos{position:absolute;inset:0;display:none;flex-direction:column;padding:70px 24px 22px}
+.photos.on{display:flex}
+.ph-main{flex:1;display:grid;place-items:center;min-height:0}
+.ph-main img{max-width:92%;max-height:100%;object-fit:contain;filter:drop-shadow(0 26px 28px rgba(0,0,0,.16));animation:phin .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes phin{from{opacity:0;transform:translateX(18px)}}
+.ph-thumbs{display:flex;gap:10px;justify-content:center;margin-top:14px}
+.ph-thumbs button{width:74px;height:56px;border-radius:14px;background:#fff;display:grid;place-items:center;padding:6px;box-shadow:0 1px 6px rgba(0,0,0,.06);transition:.2s;border:2px solid transparent}
+.ph-thumbs button.on{border-color:var(--ink)}
+.ph-thumbs img{max-width:100%;max-height:100%;object-fit:contain}
+.seg button .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-left:6px;vertical-align:middle;animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
 .hint{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--mute);background:rgba(255,255,255,.75);
   padding:6px 12px;border-radius:999px;backdrop-filter:blur(6px);white-space:nowrap}
 .info{padding:44px 40px 30px;overflow:auto;display:flex;flex-direction:column}
@@ -202,7 +209,7 @@ model-viewer{width:100%;height:100%;--poster-color:transparent;--progress-bar-co
   <div class="panel">
     <div class="viewer">
       <button class="close" id="close" aria-label="Fechar">×</button>
-      <div class="seg"><button class="on" data-v="3d">3D</button><button data-v="ph">Fotos</button></div>
+      <div class="seg"><button class="on" data-v="ph">Fotos</button><button data-v="3d" id="seg3d">3D</button></div>
       <model-viewer id="mv" camera-controls touch-action="pan-y" field-of-view="28deg"
         shadow-intensity="1.1" shadow-softness=".9" exposure="1.05" environment-image="neutral"
         camera-orbit="-28deg 74deg auto" min-camera-orbit="auto 10deg auto" max-camera-orbit="auto 100deg auto"
@@ -296,11 +303,15 @@ render();
 const mv = $('#mv'); let cur = null, size = null;
 const bag = [];
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('on'), 2200); }
+let view = 'ph', modelReady = false;
 function setView(v) {
+  view = v;
   document.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
   $('#photos').classList.toggle('on', v === 'ph'); mv.style.visibility = v === 'ph' ? 'hidden' : 'visible';
   $('#hint').style.display = v === 'ph' ? 'none' : '';
+  $('#gen').classList.toggle('off', v === 'ph' || modelReady);
 }
+function set3dLabel(ready) { $('#seg3d').innerHTML = ready ? '3D' : '3D<span class="dot"></span>'; }
 document.querySelectorAll('.seg button').forEach((b) => b.onclick = () => setView(b.dataset.v));
 
 async function open(p) {
@@ -314,24 +325,30 @@ async function open(p) {
     b.onclick = () => { size = s; document.querySelectorAll('#sizes button').forEach((x) => x.classList.toggle('on', x === b)); };
     $('#sizes').append(b);
   });
-  $('#photos').innerHTML = ['lat', 'med', '04', '03'].map((k) => `<div><img src="${img(p, k)}" alt=""></div>`).join('');
-  setView('3d');
+  const shots = ['lat', 'med', '04', '03'];
+  $('#photos').innerHTML = `<div class="ph-main"><img id="phMain" src="${img(p, 'lat')}" alt="${p.name}"></div>
+    <div class="ph-thumbs">${shots.map((k, i) => `<button class="${i ? '' : 'on'}" data-k="${k}"><img src="${img(p, k)}" alt=""></button>`).join('')}</div>`;
+  document.querySelectorAll('.ph-thumbs button').forEach((b) => b.onclick = () => {
+    document.querySelectorAll('.ph-thumbs button').forEach((x) => x.classList.toggle('on', x === b));
+    const m = $('#phMain'); m.src = img(p, b.dataset.k); m.style.animation = 'none'; m.offsetHeight; m.style.animation = '';
+  });
+  modelReady = false; set3dLabel(false);
+  setView('ph');
   $('#sheet').classList.add('on'); document.body.style.overflow = 'hidden';
   if (location.hash !== '#' + p.id) history.replaceState(null, '', '#' + p.id);
 
-  const gen = $('#gen'), steps = [...document.querySelectorAll('#genSteps li')];
-  gen.classList.remove('off'); steps.forEach((s) => s.className = '');
+  // 3D gerado em segundo plano enquanto o cliente vê as fotos
+  const steps = [...document.querySelectorAll('#genSteps li')];
+  steps.forEach((s) => s.className = '');
   mv.removeAttribute('src');
-  const t0 = performance.now();
+  await new Promise((r) => setTimeout(r, 350)); // deixa a ficha abrir suave antes de gerar
+  if (cur !== p) return;
   const url = await generateModel(img(p, 'lat'), img(p, 'med'), (i) => steps.forEach((s, k) => s.className = k < i ? 'done' : k === i ? 'cur' : ''));
   steps.forEach((s) => s.className = 'done');
-  // pequena pausa para o usuário ver a etapa final
-  await new Promise((r) => setTimeout(r, Math.max(0, 900 - (performance.now() - t0))));
   if (cur !== p) return;
+  mv.addEventListener('load', () => { if (cur !== p) return; modelReady = true; set3dLabel(true); setView(view); updateArNote(); }, { once: true });
   mv.src = url;
   mv.cameraOrbit = '-28deg 74deg auto'; mv.jumpCameraToGoal?.();
-  mv.addEventListener('load', () => gen.classList.add('off'), { once: true });
-  updateArNote();
 }
 function updateArNote() {
   const ok = mv.canActivateAR;
@@ -343,7 +360,8 @@ function close() { $('#sheet').classList.remove('on'); document.body.style.overf
 $('#close').onclick = close;
 $('#sheet').onclick = (e) => { if (e.target.id === 'sheet') close(); };
 addEventListener('keydown', (e) => e.key === 'Escape' && close());
-$('#arBtn').onclick = () => {
+$('#arBtn').onclick = async () => {
+  if (!modelReady) { toast('Preparando o modelo 3D…'); await new Promise((r) => { const t = setInterval(() => { if (modelReady) { clearInterval(t); r(); } }, 150); }); }
   if (mv.canActivateAR) mv.activateAR();
   else toast('Abra no celular para ver o tênis no seu espaço 📱');
 };
